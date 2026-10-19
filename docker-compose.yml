@@ -1,0 +1,26 @@
+services:
+  arl:
+    build: .
+    image: agent-reliability-lab:latest
+    container_name: arl
+    ports:
+      - "127.0.0.1:8000:8000"   # localhost only: set ARL_AUTH_TOKEN before exposing further
+    env_file:
+      - .env
+    environment:
+      ARL_LOCAL_BASE_URL: ${ARL_LOCAL_BASE_URL:-http://host.docker.internal:11434/v1}
+      ARL_CONCURRENCY: ${ARL_CONCURRENCY:-8}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - arl-data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+
+volumes:
+  arl-data:
