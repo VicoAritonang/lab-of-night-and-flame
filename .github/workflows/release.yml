@@ -1,7 +1,7 @@
 name: Release
 
-# Tag vX.Y.Z to publish the image (GHCR) and the Python/npm SDKs.
-# The Go SDK is a nested module: also push the tag sdk/go/vX.Y.Z.
+# Tag vX.Y.Z to publish the image (GHCR), the Python/npm SDKs and the Go SDK
+# (go.vicoworks.com/arl lives in sdk/go, so its tag is sdk/go/vX.Y.Z — created here).
 on:
   push:
     tags: ["v*.*.*"]
@@ -10,6 +10,30 @@ permissions:
   contents: read
 
 jobs:
+  go-sdk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Test
+        working-directory: sdk/go
+        run: go vet ./... && go test -count=1 ./...
+      - name: Tag sdk/go/${{ github.ref_name }}
+        run: |
+          tag="sdk/go/${GITHUB_REF_NAME}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then echo "$tag exists"; exit 0; fi
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+      - name: Publish to proxy.golang.org and pkg.go.dev
+        run: |
+          mod="go.vicoworks.com/arl@${GITHUB_REF_NAME}"
+          for i in 1 2 3 4 5; do GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod go list -m "$mod" && break; sleep 15; done
+          curl -fsS -X POST "https://pkg.go.dev/fetch/${mod}" >/dev/null || true
+
   image:
     runs-on: ubuntu-latest
     permissions:

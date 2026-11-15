@@ -63,7 +63,7 @@ docker compose -f examples/compose/docker-compose.yml up -d --build
    | --- | --- | --- |
    | Python | `pip install arl-lab` | [sdk/python](sdk/python/README.md) |
    | TypeScript / JS | `npm install arl-lab` | [sdk/typescript](sdk/typescript/README.md) |
-   | Go | `go get github.com/VicoAritonang/lab-of-night-and-flame/sdk/go` | [sdk/go](sdk/go/README.md) |
+   | Go | `go get go.vicoworks.com/arl@latest` | [sdk/go](sdk/go/README.md) |
    | Anything else | JSON over WebSocket | [connection.md](connection.md) |
 
    ```python

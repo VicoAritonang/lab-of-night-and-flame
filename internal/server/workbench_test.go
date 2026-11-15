@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	arl "github.com/VicoAritonang/lab-of-night-and-flame/sdk/go"
+	"go.vicoworks.com/arl"
 )
 
 func (f *fixture) waitRun(id string) M {

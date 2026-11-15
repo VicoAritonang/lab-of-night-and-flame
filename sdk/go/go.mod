@@ -1,4 +1,4 @@
-module github.com/VicoAritonang/lab-of-night-and-flame/sdk/go
+module go.vicoworks.com/arl
 
 go 1.23
 

@@ -27,6 +27,18 @@ with `docker compose -f examples/compose/docker-compose.yml up --build`.
 Integration tests refuse non-local databases unless `ARL_ALLOW_REMOTE_TEST_DB=true`;
 never point them at a database holding real data.
 
+## Releasing (maintainers)
+
+Push a tag `vX.Y.Z` on `main`. The release workflow then:
+
+- tags `sdk/go/vX.Y.Z` so `go get go.vicoworks.com/arl@vX.Y.Z` works, and warms
+  proxy.golang.org / pkg.go.dev;
+- publishes the Docker image to GHCR and the Python/npm SDKs.
+
+Keep `sdk/python/pyproject.toml`, `sdk/python/src/arl_lab/__init__.py` and
+`sdk/typescript/package.json` versions equal to the tag. The vanity host is a
+Cloudflare Worker in [deploy/go-vanity](deploy/go-vanity/README.md).
+
 ## Pull requests
 
 - Keep changes focused; include tests for behaviour changes.

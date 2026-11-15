@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	arl "github.com/VicoAritonang/lab-of-night-and-flame/sdk/go"
+	"go.vicoworks.com/arl"
 )
 
 var knowledge = map[string]string{
