@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://YOUR-SYNC-DOMAIN/api/:path*"
+    },
+    { "source": "/about", "destination": "/about/index.html" },
+    { "source": "/:workspace(playground|models|datasets|experiments|router-lab|agent-lab|settings)", "destination": "/:workspace/index.html" },
+    { "source": "/experiments/new", "destination": "/experiments/new/index.html" },
+    { "source": "/:path*", "destination": "/workspace.html" }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store" },
+        { "key": "X-Robots-Tag", "value": "noindex" }
+      ]
+    }
+  ]
+}

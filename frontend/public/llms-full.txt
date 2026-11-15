@@ -1,0 +1,48 @@
+# Lab Vico Aritonang / Lab Vicoworks
+
+Canonical website: https://lab.vicoworks.com/
+Public feature guide: https://lab.vicoworks.com/about
+Creator: Vico Aritonang
+Brand: Vicoworks
+Interface name: Lab of Night and Flame
+Project name: Agent Reliability Lab
+
+## Purpose
+
+An evidence-based workbench for developers who need to compare AI models, evaluate model routers, and observe AI agents. It records measurements, scoring evidence, execution attempts, and costs so that conclusions can be checked against the actual experiment. It is not a public model ranking or a source of independently verified benchmark claims.
+
+## Bench and model experiments
+
+The bench summarizes campaigns, trial counts, assessed pass rates, known spending, provider availability, and recent activity. Start by choosing or importing a dataset, selecting model targets, and freezing an experiment plan with scorers, protocol, budget, and acceptance criteria.
+
+Plans support repeated trials, seeded ordering, retry policies, concurrency limits, and budget limits. Scoring may be deterministic or judge-based. Statistical outputs include confidence intervals, paired comparisons, bootstrap estimates, pass@k, task slices, Pareto comparisons, and acceptance gates where applicable. Rescoring creates a revision of the assessments without rerunning target model calls.
+
+Execution status and quality verdict are separate: a completed campaign does not by itself imply that the target passed the acceptance gate. A trial and a provider attempt are different units; retries add attempts. Read denominators, sample sizes, and unassessed cases before interpreting a pass rate.
+
+## Router lab
+
+Router lab compares a routing target with model baselines on a shared workload. Evidence can include which downstream model was selected, quality, latency, cost, routing stability, and model-selection distributions by task slice. Placeholder illustrations and simulated fake targets are not measured results from real providers.
+
+## Agent lab
+
+Agent lab observes a separately running AI agent service. The service emits telemetry over WebSocket; the lab does not execute that service's agent loop or tools on its behalf. Phases can describe input, retrieval, agent processing, output, or service-specific stages.
+
+Evidence may include graph nodes, edges and visits, hop depth, repeated visits and retrieval retries, nested spans, model requests and responses, tool calls and results, token usage, cost entries, external evaluations, and text/image evidence. The UI supports event inspection, graph exploration, replay, phase filters, and trace export. Availability of each view depends on the events the service reports. Unreported costs remain unknown; they must not be treated as free.
+
+## Playground, model catalog, and providers
+
+Playground tests prompts with streaming responses. Model connections can use OpenRouter, OpenAI, Groq, or an OpenAI-compatible local endpoint when configured by the owner. Catalog configuration status is not a successful provider health check. Provider availability, prices, and measured results are runtime data, not claims made by this public guide.
+
+Fake targets support free simulated demonstrations of experiment and agent-tracing workflows. They demonstrate application behavior rather than the performance of a real model.
+
+## Datasets and reports
+
+The lab supports importing text/image datasets and predictions. Frozen, content-hashed snapshots provide reproducible inputs. Trial evidence and slices help investigate individual failures and compare groups of tasks. Reports can be exported as JSON, HTML, or Markdown. Binary images can be evidence; audio/video/file entries are metadata rather than a general media hosting/player service.
+
+## Access and public information
+
+The public About page is static HTML and can be read without JavaScript or owner credentials. Interactive workspace pages require JavaScript and may require owner authentication. Private records, settings, trace payloads, API endpoints, and credentials are not public documentation. This guide describes supported functionality, not the results of private experiments.
+
+Public pages are listed at https://lab.vicoworks.com/sitemap.xml.
+Crawler rules are at https://lab.vicoworks.com/robots.txt.
+The concise AI guide is at https://lab.vicoworks.com/llms.txt.

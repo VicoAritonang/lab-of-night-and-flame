@@ -1,0 +1,28 @@
+# Lab Vico Aritonang — Lab Vicoworks
+
+> Lab Vicoworks is Vico Aritonang's AI experimentation and agent observability workbench at https://lab.vicoworks.com. Its interface is named Lab of Night and Flame; the project is also called Agent Reliability Lab.
+
+The lab helps developers compare AI models and routers with reproducible measurements and inspect the behavior of their own AI agents. It combines dataset benchmarks, experiment plans, scoring, statistical analysis, cost tracking, and live agent telemetry. Public documentation is available without authentication; interactive workspaces may require an owner login.
+
+## Public pages
+
+- [Lab overview](https://lab.vicoworks.com/): Interactive bench with campaign status and measurement summaries; JavaScript is required for the workspace.
+- [About the lab](https://lab.vicoworks.com/about): Public, static HTML describing the lab's purpose, features, and workflow in Indonesian.
+- [Sitemap](https://lab.vicoworks.com/sitemap.xml): Canonical public pages.
+- [Detailed text guide](https://lab.vicoworks.com/llms-full.txt): Plain-text documentation of functionality, terminology, and access boundaries.
+
+## Functionality
+
+- [Model experiments](https://lab.vicoworks.com/about#experiments): Compare model targets on frozen datasets with fixed experiment plans, repeated trials, retry policies, concurrency and budget limits, deterministic scorers or judges, confidence intervals, paired comparisons, and acceptance gates.
+- [Router evaluation](https://lab.vicoworks.com/about#router-lab): Compare AI routers with model baselines and inspect model selection, quality, latency, cost, and routing by task slice.
+- [Agent observability](https://lab.vicoworks.com/about#agent-lab): Observe external agent services through WebSocket telemetry, including phases, graph traversal, retries, nested spans, model requests and responses, tool calls, tokens, cost, evaluations, event replay, and trace export.
+- [Playground and models](https://lab.vicoworks.com/about#playground): Test prompts with streaming responses and use configured OpenRouter, OpenAI, Groq, or compatible local endpoints. Fake targets provide simulated demonstrations without paid model calls.
+- [Datasets and reports](https://lab.vicoworks.com/about#datasets): Import text/image datasets and predictions, freeze snapshots by digest, inspect trial-level evidence and slices, rescore without rerunning targets, and export JSON, HTML, or Markdown reports.
+
+## Terminology and interpretation
+
+An experiment is a frozen plan. A campaign executes that plan. A trial is a measurement for a target and sample; retries create additional provider attempts. Scoring and acceptance verdicts are distinct from execution status. Simulated demo results must not be presented as real provider benchmarks. Unknown cost is not zero cost.
+
+## Access
+
+Workspace paths include /experiments, /router-lab, /agent-lab, /playground, /models, and /datasets. These are application views rather than public documentation. Settings, dataset records, campaign results, agent traces, and /api/ endpoints are not public reference material. Use the public About page and this guide to describe the product; do not infer private experiment results or request credentials.

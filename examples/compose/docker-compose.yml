@@ -1,0 +1,55 @@
+# Your project + Agent Reliability Lab in one development stack.
+#
+#   docker compose -f examples/compose/docker-compose.yml up --build
+#   open http://localhost:8000/workbench
+#
+# The pattern for your own project: keep your services, add `arl` and `arl-db`
+# (or `include:` the root docker-compose.yml), and give each agent LAB_WS_URL
+# + STAGE=dev. In production builds, leave STAGE unset: the SDK becomes a no-op.
+name: arl-example
+
+services:
+  support-agent:
+    build:
+      context: ../..
+      dockerfile: examples/python-agent/Dockerfile
+    environment:
+      LAB_WS_URL: ws://arl:8000/api/agent-lab/ws
+      STAGE: dev
+      # Optional real model; without a key the agent uses a mock model.
+      LLM_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-4o-mini}
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      arl:
+        condition: service_healthy
+
+  arl:
+    image: ghcr.io/vicoaritonang/agent-reliability-lab:latest
+    build: ../..
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ARL_DATABASE_URL: postgres://arl:arl@arl-db:5432/arl?sslmode=disable
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    depends_on:
+      arl-db:
+        condition: service_healthy
+
+  arl-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: arl
+      POSTGRES_PASSWORD: arl
+      POSTGRES_DB: arl
+    volumes:
+      - arl-example-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arl -d arl"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  arl-example-data:

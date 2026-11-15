@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/build-seo.mjs",
     "typecheck": "tsc -b --noEmit",
+    "test:seo": "node tests/seo_build.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

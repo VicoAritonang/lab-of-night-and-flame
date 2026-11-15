@@ -11,3 +11,16 @@ frontend/dist/
 *.db-shm
 e2e/shots/
 /docs
+/dist/
+*.exe
+private-runtime.json
+frontend/.env.local
+# Private archives and build outputs
+*.rar
+web/dist/*
+!web/dist/placeholder.html
+sdk/python/dist/
+sdk/python/build/
+*.egg-info/
+sdk/typescript/dist/
+frontend/.vercel/

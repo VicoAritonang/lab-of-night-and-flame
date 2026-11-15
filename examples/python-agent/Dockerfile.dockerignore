@@ -1,0 +1,5 @@
+*
+!sdk/python
+!examples/python-agent/agent.py
+**/__pycache__
+**/.pytest_cache

@@ -4,6 +4,8 @@ import { Sky } from "./components/Sky";
 import { A, Icon, Loading, Logo, Modal, ThemeSwitch, ToastProvider } from "./components/ui";
 import { useApi, useLocalState } from "./hooks";
 import { match, useLocation } from "./router";
+import About from "./pages/About";
+import { updateMetadata } from "./seo";
 
 const Overview = lazy(() => import("./pages/Overview"));
 const Playground = lazy(() => import("./pages/Playground"));
@@ -14,10 +16,13 @@ const Experiments = lazy(() => import("./pages/Experiments"));
 const Builder = lazy(() => import("./pages/Builder"));
 const CampaignPage = lazy(() => import("./pages/Campaign"));
 const RouterLab = lazy(() => import("./pages/RouterLab"));
+const AgentLab = lazy(() => import("./pages/AgentLab"));
+const Workbench = lazy(() => import("./pages/Workbench"));
 const Settings = lazy(() => import("./pages/Settings"));
 
 type Route = { pattern: string; render: (p: Record<string, string>) => JSX.Element; section: string };
 const ROUTES: Route[] = [
+  { pattern: "/about", render: () => <About />, section: "/about" },
   { pattern: "/", render: () => <Overview />, section: "/" },
   { pattern: "/playground", render: () => <Playground />, section: "/playground" },
   { pattern: "/models", render: () => <Models />, section: "/models" },
@@ -27,6 +32,8 @@ const ROUTES: Route[] = [
   { pattern: "/experiments/new", render: () => <Builder />, section: "/experiments" },
   { pattern: "/campaigns/:id", render: (p) => <CampaignPage id={p.id} />, section: "/experiments" },
   { pattern: "/router-lab", render: () => <RouterLab />, section: "/router-lab" },
+  { pattern: "/agent-lab", render: () => <AgentLab />, section: "/agent-lab" },
+  { pattern: "/workbench", render: () => <Workbench />, section: "/workbench" },
   { pattern: "/settings", render: () => <Settings />, section: "/settings" },
 ];
 
@@ -34,6 +41,8 @@ const KEYS = [
   { to: "/", label: "Bench" },
   { to: "/experiments", label: "Experiments" },
   { to: "/router-lab", label: "Router lab" },
+  { to: "/agent-lab", label: "Agent lab" },
+  { to: "/workbench", label: "Workbench" },
   { to: "/playground", label: "Playground" },
   { to: "/models", label: "Models" },
   { to: "/datasets", label: "Datasets" },
@@ -66,6 +75,7 @@ function Login({ onDone }: { onDone: () => void }) {
 
 export default function App() {
   const { path } = useLocation();
+  useEffect(() => updateMetadata(path), [path]);
   const [needAuth, setNeedAuth] = useState(false);
   useEffect(() => onAuthRequired(() => setNeedAuth(true)), []);
   const { data: health } = useApi<{ version: string; active_campaigns: number; auth_required: boolean }>("/api/health", { refreshMs: 5000, staleMs: 2000 });
@@ -98,6 +108,7 @@ export default function App() {
             {route ? <div key={path}>{route.render(params)}</div> : <div className="page"><h1 className="page-title">No such page</h1><A href="/">Back to the bench</A></div>}
           </Suspense>
         </main>
+        <footer className="site-footer"><span>Lab Vico Aritonang · Vicoworks</span><A href="/about">About the lab</A></footer>
       </div>
       {needAuth && <Login onDone={() => { setNeedAuth(false); location.reload(); }} />}
     </ToastProvider>

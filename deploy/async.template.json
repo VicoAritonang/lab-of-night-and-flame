@@ -1,0 +1,375 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ARL asynchronous Go workers on ARM64 Lambda; a durable Neon outbox is published by the separate lightweight SYNC gateway.",
+  "Metadata": {
+    "com.aws.cloudformation.Context": {
+      "arch": "Vercel React -> EC2 SYNC HTTP/WS -> Postgres outbox -> SQS -> Go Lambda -> shared Postgres",
+      "must": [
+        "Only job IDs go into SQS",
+        "ReportBatchItemFailures required",
+        "ARM64 executable bootstrap at ZIP root",
+        "No public worker endpoint"
+      ],
+      "ref": [
+        {
+          "at": "DEPLOYMENT.md",
+          "has": "deployment, limits, recovery and secret configuration",
+          "scope": "repository"
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "CodeBucket": {
+      "Type": "String",
+      "AllowedPattern": "[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]",
+      "Description": "Existing private deployment bucket in the same region"
+    },
+    "CodeKey": {
+      "Type": "String",
+      "Default": "arl/async-lambda-arm64.zip",
+      "MinLength": 1
+    },
+    "RuntimeSecretArn": {
+      "Type": "String",
+      "AllowedPattern": "arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+",
+      "Description": "JSON secret with NEON_DB_URL and the three provider API key fields"
+    },
+    "WorkerMemory": {
+      "Type": "Number",
+      "Default": 1024,
+      "MinValue": 512,
+      "MaxValue": 3072
+    },
+    "MaximumInvocations": {
+      "Type": "Number",
+      "Default": 2,
+      "MinValue": 2,
+      "MaxValue": 10
+    },
+    "GoroutinesPerInvocation": {
+      "Type": "Number",
+      "Default": 4,
+      "MinValue": 1,
+      "MaxValue": 8
+    }
+  },
+  "Resources": {
+    "DeadLetterQueue": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Retain poison messages for reconciliation",
+          "must": [
+            "Retention must not be shorter than source queue"
+          ],
+          "mutable": "change-with-constraints"
+        }
+      },
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true
+      }
+    },
+    "WorkQueue": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Standard queue tolerates duplicates through PostgreSQL leases and deterministic job IDs",
+          "must": [
+            "Visibility >= six times function timeout plus batching window"
+          ],
+          "mutable": "change-with-constraints"
+        }
+      },
+      "Properties": {
+        "VisibilityTimeout": 5401,
+        "MessageRetentionPeriod": 345600,
+        "SqsManagedSseEnabled": true,
+        "ReceiveMessageWaitTimeSeconds": 20,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "DeadLetterQueue",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 5
+        }
+      }
+    },
+    "QueueTransportPolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "WorkQueue"
+          },
+          {
+            "Ref": "DeadLetterQueue"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "RequireTLS",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "WorkQueue",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeadLetterQueue",
+                    "Arn"
+                  ]
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "WorkerLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/arl/${AWS::StackName}/async"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "WorkerRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Consume only this work queue and write only the pre-created log group",
+          "must": [
+            "No wildcard SQS resources",
+            "No provider keys in policies or logs"
+          ],
+          "mutable": "change-with-constraints"
+        }
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "consume-work-and-log",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes",
+                    "sqs:ChangeMessageVisibility"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "WorkQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "WorkerLogs",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AsyncWorker": {
+      "Type": "AWS::Lambda::Function",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Bounded event handler joins goroutines before returning and retries records independently",
+          "must": [
+            "provided.al2023 + arm64 + executable bootstrap",
+            "No background work after handler return",
+            "Use Neon pooled DSN and a small per-instance pool"
+          ],
+          "mutable": "change-with-constraints"
+        }
+      },
+      "Properties": {
+        "Runtime": "provided.al2023",
+        "Handler": "bootstrap",
+        "Architectures": [
+          "arm64"
+        ],
+        "Role": {
+          "Fn::GetAtt": [
+            "WorkerRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 900,
+        "MemorySize": {
+          "Ref": "WorkerMemory"
+        },
+        "ReservedConcurrentExecutions": {
+          "Ref": "MaximumInvocations"
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "CodeBucket"
+          },
+          "S3Key": {
+            "Ref": "CodeKey"
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "WorkerLogs"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "NEON_DB_URL": {
+              "Fn::Sub": "{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:NEON_DB_URL}}"
+            },
+            "OPENAI_API_KEY": {
+              "Fn::Sub": "{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:OPENAI_API_KEY}}"
+            },
+            "OPENROUTER_API_KEY": {
+              "Fn::Sub": "{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:OPENROUTER_API_KEY}}"
+            },
+            "GROQ_API_KEY": {
+              "Fn::Sub": "{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:GROQ_API_KEY}}"
+            },
+            "ARL_WORKER_CONCURRENCY": {
+              "Ref": "GoroutinesPerInvocation"
+            },
+            "ARL_DB_MAX_CONNS": "2",
+            "GOMEMLIMIT": "768MiB"
+          }
+        }
+      }
+    },
+    "WorkMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "WorkQueue",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Ref": "AsyncWorker"
+        },
+        "BatchSize": 4,
+        "MaximumBatchingWindowInSeconds": 1,
+        "FunctionResponseTypes": [
+          "ReportBatchItemFailures"
+        ],
+        "ScalingConfig": {
+          "MaximumConcurrency": {
+            "Ref": "MaximumInvocations"
+          }
+        }
+      }
+    },
+    "SyncPublishPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "Description": "Attach to the existing EC2 SYNC instance role; publishes only durable job references",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "WorkQueue",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "QueueURL": {
+      "Description": "Set ARL_SQS_QUEUE_URL on SYNC",
+      "Value": {
+        "Ref": "WorkQueue"
+      }
+    },
+    "QueueArn": {
+      "Description": "Source queue ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "WorkQueue",
+          "Arn"
+        ]
+      }
+    },
+    "DeadLetterQueueURL": {
+      "Description": "Inspect failed deliveries during reconciliation",
+      "Value": {
+        "Ref": "DeadLetterQueue"
+      }
+    },
+    "FunctionName": {
+      "Description": "Worker function name for code updates",
+      "Value": {
+        "Ref": "AsyncWorker"
+      }
+    },
+    "SyncPublishPolicyArn": {
+      "Description": "Attach policy to the existing t3.micro instance role",
+      "Value": {
+        "Ref": "SyncPublishPolicy"
+      }
+    }
+  }
+}

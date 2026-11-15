@@ -1,0 +1,22 @@
+{
+  "name": "arl-lab",
+  "version": "0.3.0",
+  "description": "TypeScript SDK for Agent Reliability Lab: live agent traces, state snapshots and Workbench replays.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=22" },
+  "sideEffects": false,
+  "keywords": ["ai-agents", "llm", "observability", "evaluation", "tracing", "testing"],
+  "repository": { "type": "git", "url": "git+https://github.com/VicoAritonang/lab-of-night-and-flame.git", "directory": "sdk/typescript" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/client.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
+  }
+}

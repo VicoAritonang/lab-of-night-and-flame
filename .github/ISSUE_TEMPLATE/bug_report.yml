@@ -1,0 +1,34 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the expected behaviour and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. docker compose up\n2. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lab version
+      description: Shown under the logo, or GET /api/health
+  - type: dropdown
+    id: sdk
+    attributes:
+      label: SDK
+      options: [None, Python, TypeScript, Go, Custom (raw protocol)]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Remove secrets and private trace content first.
+      render: text

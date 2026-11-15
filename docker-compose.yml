@@ -1,26 +1,55 @@
+# Agent Reliability Lab, all-in-one: `docker compose up -d` → http://localhost:8000
+#
+# To observe your own agent, add its service to this file (or include this file
+# from your project's compose) and give the agent:
+#   LAB_WS_URL=ws://arl:8000/api/agent-lab/ws
+#   STAGE=dev
+# See examples/compose for a complete project layout.
+name: arl
+
 services:
   arl:
+    image: ghcr.io/vicoaritonang/agent-reliability-lab:latest
     build: .
-    image: agent-reliability-lab:latest
-    container_name: arl
     ports:
-      - "127.0.0.1:8000:8000"   # localhost only: set ARL_AUTH_TOKEN before exposing further
-    env_file:
-      - .env
+      - "127.0.0.1:${ARL_PORT:-8000}:8000"
     environment:
+      ARL_DATABASE_URL: postgres://arl:arl@arl-db:5432/arl?sslmode=disable
+      ARL_AUTH_TOKEN: ${ARL_AUTH_TOKEN:-}
+      ARL_ALLOWED_ORIGINS: ${ARL_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # Optional: let the Workbench call models directly (LLM step mode, Playground, experiments).
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       ARL_LOCAL_BASE_URL: ${ARL_LOCAL_BASE_URL:-http://host.docker.internal:11434/v1}
-      ARL_CONCURRENCY: ${ARL_CONCURRENCY:-8}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    volumes:
-      - arl-data:/data
+    depends_on:
+      arl-db:
+        condition: service_healthy
     restart: unless-stopped
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=256m
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL]
+    cap_drop:
+      - ALL
+
+  arl-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: arl
+      POSTGRES_PASSWORD: arl
+      POSTGRES_DB: arl
+    volumes:
+      - arl-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arl -d arl"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
 volumes:
   arl-data:

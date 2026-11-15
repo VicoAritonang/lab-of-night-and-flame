@@ -4,6 +4,10 @@ import { LABELS, STATUS_TONE } from "../format";
 import { linkHandler } from "../router";
 import { useTween } from "../hooks";
 
+// Prefer the supplied logo.png; retain the available 192px brand asset as fallback.
+const brandImages = import.meta.glob<string>("../../assets/{logo.png,android-chrome-192x192.png}", { eager: true, query: "?url", import: "default" });
+const brandLogo = brandImages["../../assets/logo.png"] ?? brandImages["../../assets/android-chrome-192x192.png"];
+
 /* ---------------------------------------------------------------- icons (inline, 24px grid, stroke) */
 const P: Record<string, string> = {
   overview: "M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z",
@@ -49,21 +53,7 @@ export function Icon({ name, size = 16, className }: { name: keyof typeof P | st
 }
 
 export function Logo() {
-  // the Sword of Night and Flame inside a gilded seal: the blade is split azure | ember,
-  // a crescent rises on the night side and a flame on the other
-  return (
-    <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="15" fill="var(--plate)" stroke="var(--gild)" strokeWidth="1.2" />
-      <circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--gild)" strokeWidth="0.5" strokeDasharray="0.8 1.6" opacity="0.8" />
-      <path d="M10.6 8.4a4.4 4.4 0 1 0 0 8.2 3.5 3.5 0 1 1 0-8.2z" fill="var(--azure)" className="mark-moon" />
-      <path d="M22.4 7.6c.4 1.9 2.7 3.1 2.7 5.8a2.7 2.7 0 0 1-5.4 0c0-1.2.6-2.1 1.4-2.8.1.9.5 1.5 1 1.8-.2-1.7.3-3.4.3-4.8z" fill="var(--ember)" className="mark-flame" />
-      <path d="M16 4.2 L14.8 6.6 V20.6 H16 Z" fill="var(--azure)" />
-      <path d="M16 4.2 L17.2 6.6 V20.6 H16 Z" fill="var(--ember)" />
-      <rect x="11.4" y="20.4" width="9.2" height="1.6" rx="0.8" fill="var(--gild)" />
-      <line x1="16" y1="22.2" x2="16" y2="25.8" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="16" cy="27" r="1.2" fill="var(--gild)" />
-    </svg>
-  );
+  return <img className="brand-mark" src={brandLogo} alt="Logo Lab Vicoworks" width={36} height={36} decoding="async" />;
 }
 
 /** Night ⇄ Flame switch: a sliding knob over a moon (night) and a flame (light). */
