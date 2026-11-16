@@ -27,7 +27,7 @@ import (
 type M = domain.M
 
 // Version is overridden at build time with -ldflags "-X .../internal/server.Version=v1.2.3".
-var Version = "0.4.0-dev"
+var Version = "0.4.1-dev"
 
 type Server struct {
 	Config                      config.Config
