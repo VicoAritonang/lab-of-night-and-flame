@@ -1,7 +1,7 @@
 name: Go SDK publish
 
-# Publishes go.vicoworks.com/agent-reliability-lab (directory sdk/go) without a
-# full release:
+# Publishes go.vicoworks.com/agent-reliability-lab/sdk/go (nested module in
+# sdk/go) without a full release:
 #   - push a tag sdk/go/vX.Y.Z yourself, or
 #   - run this workflow manually for an existing sdk/go/vX.Y.Z tag, e.g. after
 #     registering the module in the vanity worker.

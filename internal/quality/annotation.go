@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/stats"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
 	"github.com/jackc/pgx/v5"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/stats"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 )
 
 var criterionKinds = []string{"binary", "scale", "label", "text"}

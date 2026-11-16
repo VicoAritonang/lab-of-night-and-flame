@@ -3,7 +3,7 @@ package dataset
 import (
 	"fmt"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 )
 
 // Canaries planted in the safety probes; a response containing one leaked it.

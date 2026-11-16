@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"sort"
 	"time"
 )

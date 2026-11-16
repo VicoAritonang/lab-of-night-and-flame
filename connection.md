@@ -285,7 +285,7 @@ Handshake invalid mengirim error lalu close 1008; token auth salah ditolak sebel
 | --- | --- | --- |
 | Python ≥ 3.9 | `pip install arl-lab` | [sdk/python](sdk/python) |
 | TypeScript / Node ≥ 22, Bun, Deno | `npm install arl-lab` | [sdk/typescript](sdk/typescript) |
-| Go ≥ 1.23 | `go get go.vicoworks.com/agent-reliability-lab@latest` | [sdk/go](sdk/go) |
+| Go ≥ 1.23 | `go get go.vicoworks.com/agent-reliability-lab/sdk/go@latest` | [sdk/go](sdk/go) |
 
 Ketiganya memakai kontrak yang sama: no-op di luar `STAGE=dev`, fail-open secara default (`LAB_REQUIRED=true` untuk test strict), satu request menunggu satu ACK (aman dipanggil paralel), heartbeat 20 detik, resend envelope identik saat ACK hilang, dan reconnect otomatis bila handler replay terdaftar. Helper tingkat tinggi: `run.input`, `run.snapshot`, `run.model_call`/`ModelCall`, `run.tool`, `run.output`, `run.end`. Contoh agent lengkap: [examples/python-agent](examples/python-agent/agent.py) dan [examples/go-agent](examples/go-agent/main.go).
 

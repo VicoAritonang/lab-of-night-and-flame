@@ -52,14 +52,15 @@ jobs:
       # exactly as users do (resolved locally instead of through the vanity host).
       - name: Consumer import
         run: |
-          grep -qx 'module go.vicoworks.com/agent-reliability-lab' go.mod
+          grep -qx 'module go.vicoworks.com/agent-reliability-lab/sdk/go' go.mod
+          grep -qx 'module go.vicoworks.com/agent-reliability-lab' ../../go.mod
           mkdir -p /tmp/consumer && cd /tmp/consumer
           go mod init example.com/consumer
-          go mod edit -require=go.vicoworks.com/agent-reliability-lab@v0.0.0 -replace=go.vicoworks.com/agent-reliability-lab=$GITHUB_WORKSPACE/sdk/go
+          go mod edit -require=go.vicoworks.com/agent-reliability-lab/sdk/go@v0.0.0 -replace=go.vicoworks.com/agent-reliability-lab/sdk/go=$GITHUB_WORKSPACE/sdk/go
           cat > main.go <<'GO'
           package main
 
-          import arl "go.vicoworks.com/agent-reliability-lab"
+          import arl "go.vicoworks.com/agent-reliability-lab/sdk/go"
 
           func main() { _ = arl.New("ci", arl.Options{}).Enabled() }
           GO

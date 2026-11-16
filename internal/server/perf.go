@@ -1,9 +1,9 @@
 package server
 
 import (
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/perf"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/perf"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 )
 
 func (s *Server) perfRoutes() {

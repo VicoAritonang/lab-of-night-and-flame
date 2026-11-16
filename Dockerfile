@@ -14,7 +14,7 @@ COPY sdk/go/go.mod sdk/go/go.sum ./sdk/go/
 RUN go mod download
 COPY . .
 COPY --from=ui /ui/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/VicoAritonang/lab-of-night-and-flame/internal/server.Version=${VERSION}" -o /out/arl . \
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X go.vicoworks.com/agent-reliability-lab/internal/server.Version=${VERSION}" -o /out/arl . \
  && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/arl-worker ./cmd/worker
 
 FROM gcr.io/distroless/static-debian12:nonroot

@@ -3,14 +3,14 @@ package engine
 import (
 	"context"
 	"errors"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/dataset"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/perf"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/quality"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/queue"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/tracelab"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/workbench"
+	"go.vicoworks.com/agent-reliability-lab/internal/dataset"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/perf"
+	"go.vicoworks.com/agent-reliability-lab/internal/quality"
+	"go.vicoworks.com/agent-reliability-lab/internal/queue"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/tracelab"
+	"go.vicoworks.com/agent-reliability-lab/internal/workbench"
 	"time"
 )
 

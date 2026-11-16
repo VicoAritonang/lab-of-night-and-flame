@@ -2,9 +2,9 @@ package testutil
 
 import (
 	"context"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/config"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/config"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 	"net/url"
 	"os"
 	"testing"

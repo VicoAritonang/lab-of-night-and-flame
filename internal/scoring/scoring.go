@@ -3,8 +3,8 @@ package scoring
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"golang.org/x/text/unicode/norm"
 	"math"
 	"regexp"

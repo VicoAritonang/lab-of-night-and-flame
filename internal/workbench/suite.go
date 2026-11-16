@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/stats"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/stats"
 )
 
 // Suites are regression runs: every scenario of a collection, optionally with

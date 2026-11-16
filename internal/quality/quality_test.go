@@ -3,7 +3,7 @@ package quality
 import (
 	"testing"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 )
 
 func TestValidation(t *testing.T) {

@@ -1,7 +1,8 @@
 name: Release
 
-# Tag vX.Y.Z to publish the image (GHCR), the Python/npm SDKs and the Go SDK
-# (go.vicoworks.com/agent-reliability-lab lives in sdk/go, so its tag is sdk/go/vX.Y.Z — created here).
+# Tag vX.Y.Z to publish the image (GHCR), the Python/npm SDKs and the Go SDK.
+# vX.Y.Z versions the root module go.vicoworks.com/agent-reliability-lab; the SDK
+# go.vicoworks.com/agent-reliability-lab/sdk/go is nested, so its tag is sdk/go/vX.Y.Z — created here.
 on:
   push:
     tags: ["v*.*.*"]

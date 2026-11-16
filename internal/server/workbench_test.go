@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	arl "go.vicoworks.com/agent-reliability-lab"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	arl "go.vicoworks.com/agent-reliability-lab/sdk/go"
 )
 
 func (f *fixture) waitRun(id string) M {

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/cli"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/cli"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 )
 
 func TestPromptRegistryVersionsLabelsAndRender(t *testing.T) {

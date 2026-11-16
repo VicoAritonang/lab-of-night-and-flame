@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	arl "go.vicoworks.com/agent-reliability-lab"
+	arl "go.vicoworks.com/agent-reliability-lab/sdk/go"
 )
 
 var knowledge = map[string]string{

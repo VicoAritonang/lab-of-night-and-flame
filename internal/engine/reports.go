@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"html"
 	"strings"
 )

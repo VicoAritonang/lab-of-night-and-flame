@@ -1,7 +1,7 @@
 package scoring
 
 import (
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"math"
 	"testing"
 )

@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/tracelab"
 	"github.com/jackc/pgx/v5"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/tracelab"
 )
 
 // Result reports what a batch did. Finished lists traces whose root span has

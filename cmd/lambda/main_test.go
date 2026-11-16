@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/engine"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/queue"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/testutil"
 	"github.com/aws/aws-lambda-go/events"
+	"go.vicoworks.com/agent-reliability-lab/internal/engine"
+	"go.vicoworks.com/agent-reliability-lab/internal/queue"
+	"go.vicoworks.com/agent-reliability-lab/internal/testutil"
 	"testing"
 )
 

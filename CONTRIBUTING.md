@@ -31,11 +31,11 @@ never point them at a database holding real data.
 
 Push a tag `vX.Y.Z` on `main`. The release workflow then:
 
-- tags `sdk/go/vX.Y.Z` (the Go SDK is a module in a subdirectory, so its
+- tags `sdk/go/vX.Y.Z` (the Go SDK is a nested module in a subdirectory, so its
   versions are `sdk/go/…` tags), then runs
   [.github/scripts/go-sdk-publish.sh](.github/scripts/go-sdk-publish.sh): it checks
   the vanity host, resolves the version through proxy.golang.org, builds a fresh
-  consumer module with `go get go.vicoworks.com/agent-reliability-lab@vX.Y.Z`
+  consumer module with `go get go.vicoworks.com/agent-reliability-lab/sdk/go@vX.Y.Z`
   and asks pkg.go.dev to index it;
 - publishes the Docker image to GHCR and the Python/npm SDKs.
 
@@ -49,26 +49,31 @@ host).
 ### Go vanity import path
 
 `go.vicoworks.com` is served by a shared vanity worker outside this
-repository. The module must be registered there as:
+repository (`src/packages.js` in the go-vanity project):
 
-| Field | Value |
-| --- | --- |
-| Import path | `go.vicoworks.com/agent-reliability-lab` |
-| VCS | `git` |
-| Repository | `https://github.com/VicoAritonang/lab-of-night-and-flame` |
-| Subdirectory | `sdk/go` |
-
-which serves, for `https://go.vicoworks.com/agent-reliability-lab?go-get=1`
-(and any sub-package path):
-
-```html
-<meta name="go-import" content="go.vicoworks.com/agent-reliability-lab git https://github.com/VicoAritonang/lab-of-night-and-flame sdk/go">
+```js
+"agent-reliability-lab": {
+  repo: "https://github.com/VicoAritonang/lab-of-night-and-flame",
+  branch: "main",
+},
 ```
 
-The subdirectory field is read by the go command since Go 1.25 and by
-proxy.golang.org, so users on older Go resolve the module through the default
-`GOPROXY`. Optionally add `go-source` for pkg.go.dev source links:
-`go.vicoworks.com/agent-reliability-lab https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go{/dir} https://github.com/VicoAritonang/lab-of-night-and-flame/blob/main/sdk/go{/dir}/{file}#L{line}`.
+It maps the path to the repository root, so the repository holds two modules:
+
+| Module | Directory | Tags |
+| --- | --- | --- |
+| `go.vicoworks.com/agent-reliability-lab` (server, `internal/…`) | `.` | `vX.Y.Z` |
+| `go.vicoworks.com/agent-reliability-lab/sdk/go` (Go SDK) | `sdk/go` | `sdk/go/vX.Y.Z` |
+
+Both resolve through the same meta, served for
+`https://go.vicoworks.com/agent-reliability-lab/sdk/go?go-get=1` as well:
+
+```html
+<meta name="go-import" content="go.vicoworks.com/agent-reliability-lab git https://github.com/VicoAritonang/lab-of-night-and-flame">
+```
+
+`go.mod` lines must match these paths exactly; a major version 2 adds `/v2`
+(`…/agent-reliability-lab/sdk/go/v2`) without changes to the vanity worker.
 
 ## Pull requests
 

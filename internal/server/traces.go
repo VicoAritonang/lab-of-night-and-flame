@@ -3,10 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/tracelab"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/workbench"
 	"github.com/coder/websocket"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/tracelab"
+	"go.vicoworks.com/agent-reliability-lab/internal/workbench"
 	"log/slog"
 	"net/http"
 	"strconv"

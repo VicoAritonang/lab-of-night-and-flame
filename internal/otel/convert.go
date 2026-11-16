@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 )
 
 // Span categories, derived from gen_ai.operation.name or openinference.span.kind.

@@ -10,9 +10,9 @@ import (
 	"math"
 	"strings"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
 	"github.com/jackc/pgx/v5"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 )
 
 type M = domain.M

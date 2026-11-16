@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/config"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/dataset"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
-	migrations "github.com/VicoAritonang/lab-of-night-and-flame/sql"
+	"go.vicoworks.com/agent-reliability-lab/internal/config"
+	"go.vicoworks.com/agent-reliability-lab/internal/dataset"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
+	migrations "go.vicoworks.com/agent-reliability-lab/sql"
 	"os"
 )
 

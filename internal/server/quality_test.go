@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
-	arl "go.vicoworks.com/agent-reliability-lab"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	arl "go.vicoworks.com/agent-reliability-lab/sdk/go"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )

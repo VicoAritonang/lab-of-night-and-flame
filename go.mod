@@ -1,4 +1,4 @@
-module github.com/VicoAritonang/lab-of-night-and-flame
+module go.vicoworks.com/agent-reliability-lab
 
 go 1.26.0
 
@@ -34,8 +34,8 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	go.vicoworks.com/agent-reliability-lab v0.0.0
+	go.vicoworks.com/agent-reliability-lab/sdk/go v0.0.0
 	golang.org/x/sync v0.24.0 // indirect
 )
 
-replace go.vicoworks.com/agent-reliability-lab => ./sdk/go
+replace go.vicoworks.com/agent-reliability-lab/sdk/go => ./sdk/go

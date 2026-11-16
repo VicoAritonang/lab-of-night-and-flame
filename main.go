@@ -20,14 +20,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/cli"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/config"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/engine"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/server"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
-	migrations "github.com/VicoAritonang/lab-of-night-and-flame/sql"
-	"github.com/VicoAritonang/lab-of-night-and-flame/web"
+	"go.vicoworks.com/agent-reliability-lab/internal/cli"
+	"go.vicoworks.com/agent-reliability-lab/internal/config"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/engine"
+	"go.vicoworks.com/agent-reliability-lab/internal/server"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
+	migrations "go.vicoworks.com/agent-reliability-lab/sql"
+	"go.vicoworks.com/agent-reliability-lab/web"
 )
 
 //go:embed connection.md

@@ -1,4 +1,4 @@
-module go.vicoworks.com/agent-reliability-lab
+module go.vicoworks.com/agent-reliability-lab/sdk/go
 
 go 1.23
 

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/prompts"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/prompts"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 )
 
 func (s *Server) promptRoutes() {

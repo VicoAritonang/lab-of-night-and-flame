@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/otel"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/otel"
 )
 
 const maxOTLPBody = 16 << 20

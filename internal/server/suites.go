@@ -3,9 +3,9 @@ package server
 import (
 	"errors"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/workbench"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/workbench"
 )
 
 func (s *Server) suiteRoutes() {

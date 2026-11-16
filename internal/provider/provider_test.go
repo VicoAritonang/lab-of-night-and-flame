@@ -2,8 +2,8 @@ package provider
 
 import (
 	"context"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/testutil"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/testutil"
 	"strings"
 	"testing"
 )

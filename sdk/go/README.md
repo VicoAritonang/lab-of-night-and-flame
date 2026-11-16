@@ -1,11 +1,11 @@
 # Go SDK for Agent Reliability Lab
 
 ```bash
-go get go.vicoworks.com/agent-reliability-lab@latest
+go get go.vicoworks.com/agent-reliability-lab/sdk/go@latest
 ```
 
 ```go
-import arl "go.vicoworks.com/agent-reliability-lab"
+import arl "go.vicoworks.com/agent-reliability-lab/sdk/go"
 
 lab := arl.New("support-agent", arl.Options{}) // reads LAB_WS_URL, STAGE, LAB_TOKEN
 lab.OnReplay(func(ctx context.Context, r *arl.Replay) error {
@@ -34,9 +34,9 @@ every call is a no-op. Fail-open by default; `Options.Required` or
 
 - Requires Go 1.23+. Only dependency: `github.com/coder/websocket`.
 - `go.vicoworks.com/agent-reliability-lab` is a vanity path for
-  [github.com/VicoAritonang/lab-of-night-and-flame/sdk/go](https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go).
-  With the default `GOPROXY` it works on any supported Go version; with
-  `GOPROXY=direct` it needs Go 1.25+.
+  [github.com/VicoAritonang/lab-of-night-and-flame](https://github.com/VicoAritonang/lab-of-night-and-flame);
+  the SDK is the nested module in [sdk/go](https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go),
+  versioned by `sdk/go/vX.Y.Z` tags.
 - A complete agent is in [examples/go-agent](../../examples/go-agent/main.go);
   the protocol is in [connection.md](../../connection.md).
 

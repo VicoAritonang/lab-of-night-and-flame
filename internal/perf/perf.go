@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/provider"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/stats"
-	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
+	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/provider"
+	"go.vicoworks.com/agent-reliability-lab/internal/stats"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 )
 
 type M = domain.M
