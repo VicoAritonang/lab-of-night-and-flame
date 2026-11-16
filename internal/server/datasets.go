@@ -25,7 +25,7 @@ func listDatasets(r *Request) (any, error) {
 		return nil, err
 	}
 	if n == 0 {
-		if _, err = r.Async("datasets.seed", M{}, "seed:v1"); err != nil {
+		if _, err = r.Async("datasets.seed", M{}, "seed:v2"); err != nil {
 			return nil, err
 		}
 	}

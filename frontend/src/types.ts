@@ -44,6 +44,7 @@ export interface Preflight {
   ok: boolean; errors: string[]; warnings: string[]; arms: Arm[]; samples: number; trials: number; calls_estimate: number;
   judge_calls_estimate: number; cost_low_usd: number | null; cost_high_usd: number | null; unknown_price_arms: string[];
   disclosure: { recipient: string; kind: string; data: string; models?: string[] }[]; plan_digest: string; labels: string[];
+  power?: { alpha: number; power: number; samples_per_arm: number; mde_at_50: number | null; mde_at_80: number | null; samples_for_5pt_at_80: number | null; method: string };
 }
 
 export interface CampaignRow {
@@ -78,7 +79,7 @@ export interface ArmSummary {
   output_tokens_per_s: Dist; tokens_in_mean: number | null; tokens_out_mean: number | null;
   cost: { target_known_usd: number; judge_known_usd: number; total_known_usd: number; unknown_cost_attempts: number; complete: boolean; per_trial_usd: number | null; per_pass_usd: number | null };
 }
-export interface Comparison { baseline: string; candidate: string; paired_samples: number; missing_pairs: number; wins: number; losses: number; ties: number; diff: Interval | null; mcnemar_p: number | null; test: string }
+export interface Comparison { baseline: string; candidate: string; paired_samples: number; missing_pairs: number; wins: number; losses: number; ties: number; diff: Interval | null; mcnemar_p: number | null; test: string; mcnemar_p_holm?: number | null; mcnemar_p_bh?: number | null; effect_size_h?: number | null }
 export interface Results {
   campaign_id: string; status: string; primary_scorer: string; scorers: ScorerSpec[]; scoring_revision: number;
   dataset: { id: string; name: string; version: number; digest: string; modality: string };

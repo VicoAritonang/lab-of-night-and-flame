@@ -261,11 +261,12 @@ func Request(s M) (provider.Request, error) {
 
 // Assert evaluates scenario checks against a direct LLM result.
 func Assert(checks M, result M) []M {
-	out := []M{}
-	output := domain.Str(result["text"])
-	for _, term := range domain.Strings(checks["output_contains"]) {
-		out = append(out, M{"name": "Output contains: " + term, "passed": strings.Contains(output, term), "evidence": M{"expected": term}})
+	out := tracelab.OutputChecks(checks, domain.Str(result["text"]), true)
+	tools := []string{}
+	for _, call := range domain.Maps(result["tool_calls"]) {
+		tools = append(tools, domain.Str(domain.Obj(call["function"])["name"]))
 	}
+	out = append(out, tracelab.ToolChecks(checks, tools, 1, true)...)
 	if checks["max_latency_ms"] != nil {
 		out = append(out, M{"name": "Latency", "passed": domain.Num(result["latency_ms"]) <= domain.Num(checks["max_latency_ms"]), "evidence": M{"duration_ms": result["latency_ms"], "limit": checks["max_latency_ms"]}})
 	}

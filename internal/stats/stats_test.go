@@ -67,3 +67,58 @@ func TestDistributionAndPareto(t *testing.T) {
 		t.Fatal(p)
 	}
 }
+func TestMultipleComparisonAdjustments(t *testing.T) {
+	ps := []any{0.01, nil, 0.04, 0.03}
+	holm := AdjustHolm(ps)
+	if holm[1] != nil || math.Abs(holm[0].(float64)-0.03) > 1e-12 || math.Abs(holm[2].(float64)-0.06) > 1e-12 || math.Abs(holm[3].(float64)-0.06) > 1e-12 {
+		t.Fatal(holm)
+	}
+	bh := AdjustBH(ps)
+	if math.Abs(bh[0].(float64)-0.03) > 1e-12 || math.Abs(bh[2].(float64)-0.04) > 1e-12 || math.Abs(bh[3].(float64)-0.04) > 1e-12 {
+		t.Fatal(bh)
+	}
+}
+func TestPowerAnalysis(t *testing.T) {
+	// Cohen (1988): h=0.2, alpha=.05 two-sided, power=.8 → n≈196.
+	n := SampleSize(0.5, math.Pow(math.Sin(math.Asin(math.Sqrt(0.5))+0.1), 2), 0.05, 0.8)
+	if n.(int) < 195 || n.(int) > 197 {
+		t.Fatal(n)
+	}
+	mde := MinimumDetectable(0.5, 196, 0.05, 0.8).(float64)
+	if mde < 0.09 || mde > 0.11 {
+		t.Fatal(mde)
+	}
+	if math.Abs(normalQuantile(0.975)-1.959963984540054) > 1e-8 {
+		t.Fatal("quantile")
+	}
+}
+func TestAgreement(t *testing.T) {
+	// Classic 2x2 example: 20 yes/yes, 5 yes/no, 10 no/yes, 15 no/no → κ=0.4.
+	a, b := []string{}, []string{}
+	add := func(n int, x, y string) {
+		for i := 0; i < n; i++ {
+			a, b = append(a, x), append(b, y)
+		}
+	}
+	add(20, "y", "y")
+	add(5, "y", "n")
+	add(10, "n", "y")
+	add(15, "n", "n")
+	if k := CohenKappa(a, b).(float64); math.Abs(k-0.4) > 1e-12 {
+		t.Fatal(k)
+	}
+	if alpha := KrippendorffAlpha([][]float64{{1, 1}, {0, 0}, {1, 1, 1}}, false).(float64); alpha != 1 {
+		t.Fatal(alpha)
+	}
+	// Krippendorff (2011) nominal reliability-data example → α≈0.743.
+	units := [][]float64{{1, 1, 1}, {2, 2, 3, 2}, {3, 3, 3, 3}, {3, 3, 3, 3}, {2, 2, 2, 2}, {1, 2, 3, 4}, {4, 4, 4, 4}, {1, 1, 2, 1}, {2, 2, 2, 2}, {5, 5, 5}, {1, 1}, {3}}
+	if alpha := KrippendorffAlpha(units, false).(float64); math.Abs(alpha-0.743) > 1e-3 {
+		t.Fatal(alpha)
+	}
+	if r := Spearman([]float64{1, 2, 3, 4}, []float64{10, 20, 30, 45}).(float64); r != 1 {
+		t.Fatal(r)
+	}
+	if Pearson([]float64{1, 1, 1}, []float64{1, 2, 3}) != nil {
+		t.Fatal("constant series has no correlation")
+	}
+}

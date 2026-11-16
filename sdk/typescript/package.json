@@ -1,6 +1,6 @@
 {
   "name": "arl-lab",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "TypeScript SDK for Agent Reliability Lab: live agent traces, state snapshots and Workbench replays.",
   "license": "Apache-2.0",
   "type": "module",

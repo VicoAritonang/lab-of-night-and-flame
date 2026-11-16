@@ -225,25 +225,31 @@ func traceSessions(r *Request) (any, error) {
 	}
 	return out, rows.Err()
 }
+
+// traceRuns lists traces, newest first. Filters: service_name, status,
+// verdict, model, tag, thread_id, user_id, source, q (name), min_ms,
+// errors=true, before (started_at cursor) and hours.
 func traceRuns(r *Request) (any, error) {
 	q := r.R.URL.Query()
-	rows, err := r.DB.Pool.Query(r.R.Context(), "SELECT r.id,r.session_id,r.external_id,r.name,r.status,r.started_at,r.finished_at,r.event_count,s.service,s.config->>'lab' FROM arl.traces r JOIN arl.sessions s ON s.id=r.session_id WHERE r.project_id=$1 AND ($2='' OR s.service=$2) AND ($3='' OR r.status=$3) ORDER BY r.started_at DESC LIMIT $4", r.DB.Project, q.Get("service_name"), q.Get("status"), queryInt(r.R, "limit", 100, 1, 500))
+	minMS, _ := strconv.ParseFloat(q.Get("min_ms"), 64)
+	before, _ := strconv.ParseFloat(q.Get("before"), 64)
+	hours, _ := strconv.ParseFloat(q.Get("hours"), 64)
+	since := 0.
+	if hours > 0 {
+		since = domain.Now() - hours*3600
+	}
+	list, err := rows(r.R.Context(), r.DB, `SELECT r.id,r.session_id,r.external_id,r.name,r.status,r.started_at,r.finished_at,r.event_count,s.service,s.config->>'lab' AS lab,
+ r.duration_ms,r.cost_usd,r.tokens_in,r.tokens_out,r.model_calls,r.tool_calls,r.errors,r.models,r.tags,r.thread_id,r.user_id,r.source,r.verdict,
+ (SELECT count(*) FROM arl.feedback f WHERE f.trace_id=r.id)::int AS feedback_count
+ FROM arl.traces r JOIN arl.sessions s ON s.id=r.session_id
+ WHERE r.project_id=$1 AND ($2='' OR s.service=$2) AND ($3='' OR r.status=$3) AND ($5='' OR r.verdict=$5) AND ($6='' OR $6=ANY(r.models)) AND ($7='' OR $7=ANY(r.tags))
+ AND ($8='' OR r.thread_id=$8) AND ($9='' OR r.user_id=$9) AND ($10='' OR r.source=$10) AND ($11='' OR r.name ILIKE '%'||$11||'%' OR r.external_id=$11 OR r.id=$11)
+ AND ($12::float8<=0 OR r.duration_ms>=$12) AND (NOT $13 OR r.errors>0 OR r.status='failed') AND ($14::float8<=0 OR r.started_at<$14) AND r.started_at>=$15
+ ORDER BY r.started_at DESC LIMIT $4`, r.DB.Project, q.Get("service_name"), q.Get("status"), queryInt(r.R, "limit", 100, 1, 500), q.Get("verdict"), q.Get("model"), q.Get("tag"), q.Get("thread_id"), q.Get("user_id"), q.Get("source"), q.Get("q"), minMS, q.Get("errors") == "true", before, since)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []M{}
-	for rows.Next() {
-		var id, sid, external, name, status, service, lab string
-		var start float64
-		var end *float64
-		var n int
-		if err = rows.Scan(&id, &sid, &external, &name, &status, &start, &end, &n, &service, &lab); err != nil {
-			return nil, err
-		}
-		out = append(out, M{"id": id, "session_id": sid, "external_id": external, "name": name, "status": status, "started_at": start, "finished_at": end, "event_count": n, "service": service, "lab": lab})
-	}
-	return out, rows.Err()
+	return list, nil
 }
 func traceDetail(r *Request) (any, error) {
 	id := r.R.PathValue("id")

@@ -411,13 +411,13 @@ function Forest({ comps, label, color, margin }: { comps: Comparison[]; label: (
             return (
               <g key={c.candidate} onMouseMove={(e) => tip.show(e, <><div className="tt-title">{label(c.candidate)}</div>
                 <div className="tt-row">Δ <b>{pct(d?.estimate, 1, true)}</b></div><div className="tt-row">95% CI <b>{pct(d?.low, 1, true)} … {pct(d?.high, 1, true)}</b></div>
-                <div className="tt-row">W / L / T <b>{c.wins} / {c.losses} / {c.ties}</b></div><div className="tt-row">McNemar p <b>{c.mcnemar_p == null ? "—" : c.mcnemar_p.toFixed(4)}</b></div>
+                <div className="tt-row">W / L / T <b>{c.wins} / {c.losses} / {c.ties}</b></div><div className="tt-row">McNemar p <b>{c.mcnemar_p == null ? "—" : c.mcnemar_p.toFixed(4)}</b></div>{c.mcnemar_p_holm != null && <div className="tt-row">Holm-adjusted p <b>{c.mcnemar_p_holm.toFixed(4)}</b></div>}{c.mcnemar_p_bh != null && <div className="tt-row">BH (FDR) p <b>{c.mcnemar_p_bh.toFixed(4)}</b></div>}{c.effect_size_h != null && <div className="tt-row">Cohen's h <b>{c.effect_size_h.toFixed(2)}</b></div>}
                 <div className="tt-row">paired samples <b>{c.paired_samples}</b></div>{c.missing_pairs > 0 && <div className="tt-row warn">missing pairs {c.missing_pairs}</div>}</>)} onMouseLeave={tip.hide}>
                 <rect x={0} y={y - rowH / 2} width={w} height={rowH} fill="transparent" />
                 <text x={lw - 10} y={y + 4} textAnchor="end" className="lbl">{label(c.candidate).slice(0, 34)}</text>
                 {d?.low != null && d?.high != null && <line x1={x(d.low)} x2={x(d.high)} y1={y} y2={y} stroke={color(c.candidate)} strokeWidth={3} strokeLinecap="round" className="bar-grow" style={{ transformOrigin: "center" }} />}
                 {d?.estimate != null && <circle cx={x(d.estimate)} cy={y} r={6} fill={color(c.candidate)} stroke="var(--plate)" strokeWidth={2} className="pop-in" />}
-                <text x={lw + pw + 12} y={y + 4} className="val">{pct(d?.estimate, 1, true)} <tspan fill="var(--muted)">W{c.wins}/L{c.losses}{c.mcnemar_p != null ? ` · p=${c.mcnemar_p.toFixed(3)}` : " · bootstrap CI"}</tspan></text>
+                <text x={lw + pw + 12} y={y + 4} className="val">{pct(d?.estimate, 1, true)} <tspan fill="var(--muted)">W{c.wins}/L{c.losses}{c.mcnemar_p != null ? ` · p=${c.mcnemar_p.toFixed(3)}${comps.length > 1 && c.mcnemar_p_holm != null ? ` (Holm ${c.mcnemar_p_holm.toFixed(3)})` : ""}` : " · bootstrap CI"}</tspan></text>
               </g>
             );
           })}

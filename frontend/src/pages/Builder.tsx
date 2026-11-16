@@ -363,6 +363,11 @@ function PreflightPanel({ pf, err, plan, ds, paid }: { pf: Preflight | null; err
                 <div key={i} style={{ fontSize: 12 }}><Badge tone={d.kind === "external" || d.kind === "judge" ? "warn" : "good"}>{d.kind}</Badge> <b>{d.recipient}</b><div className="muted">{d.data}</div></div>
               ))}
             </div>
+            {pf.power && pf.arms.length > 1 && <>
+              <div className="divider" />
+              <div className="stat-label">Statistical power</div>
+              <div style={{ fontSize: 12 }} title={pf.power.method}>With <b>{pf.power.samples_per_arm}</b> samples per arm, a paired comparison reliably detects (α={pf.power.alpha}, power {pct(pf.power.power, 0)}) pass-rate differences of about <b>{pct(pf.power.mde_at_80, 0)}</b> around 80%, or <b>{pct(pf.power.mde_at_50, 0)}</b> around 50%. Detecting a 5-point change near 80% needs ≈{pf.power.samples_for_5pt_at_80} samples.</div>
+            </>}
             {pf.errors.map((e, i) => <div key={i} className="callout bad" style={{ fontSize: 12 }}>{e}</div>)}
             {pf.warnings.map((w, i) => <div key={i} className="callout warn" style={{ fontSize: 12 }}>{w}</div>)}
             {paid && !plan.budget.paid_run_confirmed && <div className="callout warn" style={{ fontSize: 12 }}>Paid run — confirm in <b>Protocol & gate → Budget</b> before launch.</div>}

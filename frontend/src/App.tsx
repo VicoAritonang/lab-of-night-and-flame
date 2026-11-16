@@ -19,6 +19,11 @@ const RouterLab = lazy(() => import("./pages/RouterLab"));
 const AgentLab = lazy(() => import("./pages/AgentLab"));
 const Workbench = lazy(() => import("./pages/Workbench"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Monitor = lazy(() => import("./pages/Monitor"));
+const Quality = lazy(() => import("./pages/Quality"));
+const Prompts = lazy(() => import("./pages/Prompts"));
+const Suites = lazy(() => import("./pages/Suites"));
+const Perf = lazy(() => import("./pages/Perf"));
 
 type Route = { pattern: string; render: (p: Record<string, string>) => JSX.Element; section: string };
 const ROUTES: Route[] = [
@@ -35,6 +40,11 @@ const ROUTES: Route[] = [
   { pattern: "/agent-lab", render: () => <AgentLab />, section: "/agent-lab" },
   { pattern: "/workbench", render: () => <Workbench />, section: "/workbench" },
   { pattern: "/settings", render: () => <Settings />, section: "/settings" },
+  { pattern: "/monitor", render: () => <Monitor />, section: "/monitor" },
+  { pattern: "/quality", render: () => <Quality />, section: "/quality" },
+  { pattern: "/prompts", render: () => <Prompts />, section: "/prompts" },
+  { pattern: "/suites", render: () => <Suites />, section: "/suites" },
+  { pattern: "/perf", render: () => <Perf />, section: "/perf" },
 ];
 
 const KEYS = [
@@ -42,8 +52,13 @@ const KEYS = [
   { to: "/experiments", label: "Experiments" },
   { to: "/router-lab", label: "Router lab" },
   { to: "/agent-lab", label: "Agent lab" },
+  { to: "/monitor", label: "Monitor" },
+  { to: "/quality", label: "Quality" },
   { to: "/workbench", label: "Workbench" },
+  { to: "/suites", label: "Suites" },
+  { to: "/prompts", label: "Prompts" },
   { to: "/playground", label: "Playground" },
+  { to: "/perf", label: "Perf" },
   { to: "/models", label: "Models" },
   { to: "/datasets", label: "Datasets" },
   { to: "/settings", label: "Settings" },

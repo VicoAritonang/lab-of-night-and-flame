@@ -48,12 +48,28 @@ jobs:
         with:
           go-version: "1.23"
       - run: go vet ./... && go test -race -count=1 ./...
+      # Build a separate module that imports the SDK by its published path,
+      # exactly as users do (resolved locally instead of through the vanity host).
+      - name: Consumer import
+        run: |
+          grep -qx 'module go.vicoworks.com/agent-reliability-lab' go.mod
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          go mod init example.com/consumer
+          go mod edit -require=go.vicoworks.com/agent-reliability-lab@v0.0.0 -replace=go.vicoworks.com/agent-reliability-lab=$GITHUB_WORKSPACE/sdk/go
+          cat > main.go <<'GO'
+          package main
+
+          import arl "go.vicoworks.com/agent-reliability-lab"
+
+          func main() { _ = arl.New("ci", arl.Options{}).Enabled() }
+          GO
+          go mod tidy && go build ./...
 
   sdk-python:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.9", "3.12", "3.13"]
+        python: ["3.10", "3.12", "3.13"]
     defaults:
       run:
         working-directory: sdk/python
@@ -76,18 +92,6 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npm test
-
-  go-vanity-worker:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: deploy/go-vanity
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - run: npm test
 
   ui:

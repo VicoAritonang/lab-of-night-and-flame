@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "arl-lab"
-version = "0.3.0"
+version = "0.4.0"
 description = "Python SDK for Agent Reliability Lab: live agent traces, state snapshots and Workbench replays."
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = ["websockets>=13"]
 keywords = ["ai-agents", "llm", "observability", "evaluation", "tracing", "testing"]
 classifiers = [

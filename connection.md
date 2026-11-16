@@ -232,10 +232,19 @@ Konfigurasi contoh untuk **Listener settings** atau `POST /api/agent-lab/config`
     "max_retries": 2,
     "output_contains": ["source:"],
     "required_nodes": ["policy:refund"],
-    "forbidden_tools": ["payments.charge"]
+    "forbidden_tools": ["payments.charge"],
+    "required_tools": ["lookup_order"],
+    "tool_sequence": ["lookup_order", "issue_refund"],
+    "max_tool_calls": 6,
+    "max_model_calls": 4,
+    "output_not_contains": ["As an AI"],
+    "output_regex": "^Refund",
+    "output_json_schema": {"type": "object", "required": ["answer"]}
   }
 }
 ```
+
+Check trajektori agen: `required_tools` (setiap tool harus dipanggil), `tool_sequence` (urutan sebagai subsequence; tool lain boleh di antaranya), `max_tool_calls` dan `max_model_calls` (efisiensi langkah). Check output: `output_not_contains` (canary/kebocoran), `output_regex`, `output_json_schema`. Check yang sama berlaku untuk LLM step di Workbench (nama tool dari `tool_calls`).
 
 `run.start.data.checks` meng-override field default secara parsial. Null menonaktifkan batas numerik; array kosong menonaktifkan check daftar. Konfigurasi dibekukan per run. Output substring bersifat case-sensitive dan membaca text content pada event `output`, bukan delta/chunk. Verdict `pass` hanya jika run completed, ada checks, dan seluruh check lulus. `fail` jika check gagal atau status run failed/cancelled. Tanpa checks, masih running, unknown cost, output yang belum dikirim, atau run interrupted menghasilkan `insufficient_evidence` kecuali ada bukti kegagalan. Custom evaluation dengan passed=false juga menggagalkan run; nilai score saja tidak menggantikan boolean passed.
 
@@ -276,7 +285,7 @@ Handshake invalid mengirim error lalu close 1008; token auth salah ditolak sebel
 | --- | --- | --- |
 | Python ≥ 3.9 | `pip install arl-lab` | [sdk/python](sdk/python) |
 | TypeScript / Node ≥ 22, Bun, Deno | `npm install arl-lab` | [sdk/typescript](sdk/typescript) |
-| Go ≥ 1.23 | `go get go.vicoworks.com/arl@latest` | [sdk/go](sdk/go) |
+| Go ≥ 1.23 | `go get go.vicoworks.com/agent-reliability-lab@latest` | [sdk/go](sdk/go) |
 
 Ketiganya memakai kontrak yang sama: no-op di luar `STAGE=dev`, fail-open secara default (`LAB_REQUIRED=true` untuk test strict), satu request menunggu satu ACK (aman dipanggil paralel), heartbeat 20 detik, resend envelope identik saat ACK hilang, dan reconnect otomatis bila handler replay terdaftar. Helper tingkat tinggi: `run.input`, `run.snapshot`, `run.model_call`/`ModelCall`, `run.tool`, `run.output`, `run.end`. Contoh agent lengkap: [examples/python-agent](examples/python-agent/agent.py) dan [examples/go-agent](examples/go-agent/main.go).
 
@@ -330,6 +339,66 @@ Status run Workbench diturunkan dari keduanya: kegagalan handler atau trace tida
 
 HTTP: `GET/POST /api/workbench/scenarios`, `GET/POST/DELETE /api/workbench/scenarios/{id}`, `POST /api/workbench/from-trace {"trace_id","step"?,"save"?}`, `POST /api/workbench/run {"scenario_id"?,"scenario"?,"mode":"agent|llm","session_id"?}`, `GET /api/workbench/runs?scenario_id=`, `GET /api/workbench/runs/{id}`, `GET /api/workbench/agents`.
 
+## Metadata run: thread, user, tags
+
+`run.start.data` boleh berisi `thread_id` (mengelompokkan giliran satu percakapan multi-turn), `user_id` (end user) dan `tags` (maks. 32 string). Ketiganya menjadi filter di **Monitor** dan dihitung pada metrik (jumlah thread/user). SDK: `lab.run(name, thread_id=..., user_id=..., tags=[...])`, `startRun(name, {threadId, userId, tags})`, `RunOptions{Data: arl.Object{"thread_id": ...}}`. Handshake SDK juga mengirim `metadata.environment` (runtime, OS, arsitektur, jumlah CPU; tanpa hostname) untuk membandingkan run antar mesin.
+
+## OpenTelemetry (OTLP) — framework apa pun tanpa SDK lab
+
+Agent yang sudah diinstrumentasi OpenTelemetry (OpenAI Agents SDK, LangChain/LangGraph via OpenLLMetry atau OpenInference, LlamaIndex, Vercel AI SDK, Pydantic AI, Google ADK, Strands, Spring AI, dsb.) cukup diarahkan ke lab:
+
+```dotenv
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:8000/api/otel/v1/traces
+# atau OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:8000/api/otel  (exporter menambah /v1/traces)
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <ARL_AUTH_TOKEN bila diset>
+```
+
+Endpoint menerima OTLP/HTTP **protobuf** dan **JSON**, dengan atau tanpa gzip; `/v1/traces` di root lab juga diterima. Pemetaan:
+
+| Span | Event lab |
+| --- | --- |
+| `gen_ai.operation.name=chat` / `text_completion` / `generate_content`, atau `openinference.span.kind=LLM` | `model.request` (berisi `request` OpenAI-compatible dari `gen_ai.input.messages` + `gen_ai.system_instructions`, atau `gen_ai.prompt.N.*` / `llm.input_messages.N.*`) → `model.response` (teks, tool calls, token) → `cost.record` |
+| `execute_tool`, atau `openinference.span.kind=TOOL` | `tool.call` + `tool.result` (`gen_ai.tool.name`, `gen_ai.tool.call.id/arguments/result`) |
+| `invoke_agent` / `create_agent`, atau `AGENT` | `graph.visit` (node = `gen_ai.agent.name`, edge dari agent induk) + span |
+| `embeddings`, `RETRIEVER`, `RERANKER` | span di fase `retrieval` |
+| span lain | `span.start` / `span.end` dengan atribut |
+| event span `exception` | event `error` |
+
+Satu trace OTel = satu trace lab (`external_id` = trace id). Span boleh datang dalam beberapa batch dan urutan apa pun: trace dibuat dari span pertama, root span menetapkan nama, waktu mulai, input/output (`input.value`/`output.value`, `traceloop.entity.*`) dan `run.end`. Span yang datang setelah root tetap disimpan. `gen_ai.conversation.id`/`session.id` menjadi `thread_id`, `user.id`/`enduser.id` menjadi `user_id`. Event id diturunkan dari span sehingga batch yang dikirim ulang tidak menggandakan data. Span LLM yang membawa pesan dapat dibuka di Workbench sebagai LLM step. Konvensi GenAI OpenTelemetry masih berstatus *Development*; lab membaca nama atribut lama dan baru.
+
+## Feedback, anotasi, evaluator online, alert
+
+- **Feedback**: `POST /api/feedback {run_id, service, name, value, comment}` (run_id = id run milik agent Anda) atau `POST /api/agent-lab/runs/{trace_id}/feedback`. `value` angka atau boolean; `label` dan `comment` opsional; `source` = `user` (default), `human`, `sdk`. Header `Idempotency-Key` membuat pengiriman ulang aman. SDK: `lab.feedback("thumbs", True, run_id=...)`, `run.feedback(...)`.
+- **Annotation queue** (`/quality`): rubric (binary, scale, label, text), N annotator per item, sampling trace berdasarkan filter. Skor reviewer disimpan sebagai feedback `human`. Endpoint agreement menghitung Krippendorff's α, Cohen's κ (dua annotator) dan kesesuaian evaluator otomatis yang menulis feedback dengan nama sama terhadap konsensus manusia (akurasi, κ, confusion, Pearson/Spearman). Gunakan ini untuk mengkalibrasi LLM judge sebelum dipercaya.
+- **Evaluator online**: dijalankan setelah trace selesai pada sampel deterministik (`sample_rate`) dan filter service/nama/source/tag. Jenis: `llm_judge` (rubric tanpa referensi, budget harian `max_usd_per_day`), `checks` (check trajektori/output di atas, post hoc) dan `scorer` (scorer deterministik). Hasil = feedback `auto`. `POST /api/evaluators/test` untuk dry-run, `/backfill` untuk trace lama.
+- **Alert**: metrik `error_rate`, `fail_rate`, `p95_latency_ms`, `cost_usd`, `traces`, `feedback_mean` pada jendela bergulir, diperiksa tiap menit. Transisi firing/resolved dicatat dan dikirim ke webhook (JSON dengan field `text`, kompatibel Slack/Mattermost).
+
+## Prompt registry
+
+Prompt punya versi immutable dan label (`production`, `staging`, ...). Agent mengambil versi lewat label:
+
+```python
+p = lab.prompt("support.answer", fallback="You are a support agent.")   # label production, atau latest
+messages = p.render(company="Acme", question=q)                          # {{variabel}}
+run.snapshot(config={"model": model, "prompt": p.ref})                   # catat versi yang dipakai
+```
+
+Fallback dipakai bila lab mati/tidak di `STAGE=dev`, sehingga kode produksi tidak bergantung pada lab. HTTP: `POST /api/prompts` (commit; isi identik tidak membuat versi baru), `GET /api/prompts/{name}?label=staging|version=3`, `POST /api/prompts/{name}/labels`, `POST /api/prompts/{name}/render`.
+
+## Regression suite dan gate CI
+
+`POST /api/workbench/suites {collection, overrides:{model,provider,system_prompt,params}, repeats, baseline:"latest"|id|"none", gate:{min_pass_rate,max_regressions,max_cost_usd}}` menjalankan semua scenario satu collection. Hasil per scenario dibandingkan dengan baseline (regresi = mayoritas pass berubah menjadi mayoritas fail), dengan selisih pass-rate berpasangan (bootstrap CI) dan McNemar. Dari CI gunakan binary lab yang sama:
+
+```bash
+docker run --rm --network host ghcr.io/vicoaritonang/agent-reliability-lab:latest suite \
+  --url http://localhost:8000 --collection support --model gpt-4.1-mini --repeats 3 --baseline latest --min-pass-rate 0.9
+# exit 0 = gate lulus, 1 = gate gagal, 2 = error koneksi/pemakaian
+```
+
+## Performance lab
+
+`POST /api/perf {provider, model, concurrency:[1,2,4,8], requests, max_tokens, stream, confirm_paid}` mengirim permintaan yang sama pada concurrency meningkat dan mengukur TTFT, latency p50/p95, kecepatan decode (token/detik per request), throughput agregat dan error per level, serta titik jenuh (throughput tertinggi dengan p95 ≤ 1,5× sekuensial dan error < 5%). Cocok untuk mengukur model lokal (Ollama, vLLM, LM Studio) di hardware Anda. Provider berbayar wajib `confirm_paid`.
+
 ## HTTP API dan fitur lab lain
 
 Semua URL di bawah relatif terhadap origin lab, dengan bearer token bila dikonfigurasi. Indeks HTTP tersedia di `/api/docs` dan `/api/openapi.json`; bentuk payload mengikuti halaman frontend dan contoh dalam dokumen ini; handshake WS dijelaskan di dokumen ini.
@@ -343,7 +412,7 @@ Semua URL di bawah relatif terhadap origin lab, dengan bearer token bila dikonfi
 | POST `/api/agent-lab/listener/start`, `/listener/stop` | Mengaktifkan/menonaktifkan penerimaan telemetry |
 | POST `/api/agent-lab/config` | Simpan `{pricing,checks}`; field yang tidak dikenal ditolak |
 | GET `/api/agent-lab/sessions` | 200 session terbaru, profile dan connected state; tanpa resume token/hash |
-| GET `/api/agent-lab/runs?service_name=...&status=...&limit=100` | Daftar run terbaru, limit 1–500 |
+| GET `/api/agent-lab/runs?service_name=&status=&verdict=&model=&tag=&thread_id=&user_id=&source=&q=&min_ms=&errors=true&hours=&before=&limit=100` | Daftar run terbaru dengan rollup (durasi, biaya, token, jumlah model/tool call, error, model, tags, thread, verdict); limit 1–500 |
 | GET `/api/agent-lab/runs/{trace_id}` | Ringkasan, checks yang dibekukan, verdict dan metadata |
 | GET `/api/agent-lab/runs/{trace_id}/events?after=0&limit=500` | Pagination cursor ordinal, items dan has_more; limit 1–1000 |
 | GET `/api/agent-lab/runs/{trace_id}/export` | JSON protocol, trace dan seluruh events |
@@ -355,6 +424,16 @@ Semua URL di bawah relatif terhadap origin lab, dengan bearer token bila dikonfi
 | GET `/api/campaigns/{id}/results`, `/report.json`, `/report.md`, `/report.html` | Hasil statistik/report campaign |
 | POST `/api/datasets/{id}/predictions` | Import prediksi backend untuk workflow evaluasi offline lama |
 | POST `/api/playground` | Prompt + gambar lintas model, SSE; panggilan provider dijalankan lab |
+| POST `/api/otel/v1/traces` (alias `/v1/traces`) | Ingest OTLP/HTTP protobuf atau JSON |
+| GET `/api/monitor/metrics?hours=24&service=` | Total, deret waktu, breakdown model/tool/service, feedback, check yang paling sering gagal |
+| GET `/api/monitor/facets` | Nilai filter: service, model, tag, nama feedback |
+| POST `/api/feedback`, GET/POST `/api/agent-lab/runs/{id}/feedback`, DELETE `/api/feedback/{id}` | Feedback trace |
+| `/api/annotation/queues[/{id}[/items\|/next\|/agreement]]`, `/api/annotation/items/{id}/submit\|skip` | Annotation queue |
+| `/api/evaluators[/{id}[/backfill]]`, POST `/api/evaluators/test` | Evaluator online |
+| `/api/alerts[/{id}]`, GET `/api/alerts/events`, POST `/api/alerts/check` | Alert |
+| `/api/prompts[/{name}[/versions\|/labels\|/render]]` | Prompt registry |
+| `/api/workbench/suites[/{id}]` | Regression suite |
+| `/api/perf[/{id}[/cancel]]` | Load test endpoint model |
 
 Mengisi LAB_WS_URL saja tidak otomatis menginstrumentasikan service: tambahkan adapter/hook event pada fase penting di backend Anda. Agent lab tidak mengirim perintah eksekusi atau meng-inject test request ke backend, dan belum menggabungkan trace WS menjadi campaign statistik otomatis. Gunakan integration tests Anda untuk memicu service, kirim evaluation, lalu baca verdict/export. Profil router/generic berbagi inspector trace; chart perbandingan router lama tetap memakai campaign dataset engine.
 

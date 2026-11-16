@@ -101,6 +101,11 @@ func New(service string, opts Options) *Client {
 	if opts.Timeout <= 0 {
 		opts.Timeout = 5 * time.Second
 	}
+	metadata := Object{"environment": environment()}
+	for k, v := range opts.Metadata {
+		metadata[k] = v
+	}
+	opts.Metadata = metadata
 	return &Client{opts: opts, service: service, enabled: strings.EqualFold(opts.Stage, "dev") && opts.URL != "", wake: make(chan struct{}, 1)}
 }
 

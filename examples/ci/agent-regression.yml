@@ -1,0 +1,49 @@
+# Copy to .github/workflows/ in your agent's repository.
+#
+# Starts the lab next to the job, imports the Workbench collection you keep in
+# the repo (export it from the Workbench as arl-workbench/1 JSON), runs it as a
+# regression suite with the model/prompt of this commit and fails the build
+# when the gate fails. Keep one completed suite as the baseline by running this
+# workflow on main; pull requests then compare against "latest".
+name: Agent regression
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    services:
+      arl-db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: arl
+          POSTGRES_PASSWORD: arl
+          POSTGRES_DB: arl
+        options: >-
+          --health-cmd "pg_isready -U arl" --health-interval 3s --health-timeout 3s --health-retries 20
+      arl:
+        image: ghcr.io/vicoaritonang/agent-reliability-lab:latest
+        env:
+          ARL_DATABASE_URL: postgres://arl:arl@arl-db:5432/arl?sslmode=disable
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        ports: ["8000:8000"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the lab
+        run: for i in $(seq 1 60); do curl -fs http://localhost:8000/api/health && break; sleep 2; done
+      - name: Import scenarios
+        run: |
+          jq -c '.scenarios[] | del(.id)' evals/arl-workbench.json | while read -r s; do
+            curl -fs -X POST http://localhost:8000/api/workbench/scenarios -H 'Content-Type: application/json' -d "$s" > /dev/null
+          done
+      # A lab started per job has no history, so the gate is an absolute
+      # minimum here; point --url at a long-lived lab to compare with a baseline.
+      - name: Run suite
+        run: |
+          docker run --rm --network host -v "$PWD:/work:ro" -w /work ghcr.io/vicoaritonang/agent-reliability-lab:latest suite \
+            --url http://localhost:8000 --collection support \
+            --model "$(cat evals/model.txt)" --system-prompt-file prompts/system.md \
+            --repeats 3 --min-pass-rate 0.9 --label "$GITHUB_SHA"

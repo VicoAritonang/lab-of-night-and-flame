@@ -5,10 +5,13 @@ import (
 	"errors"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/dataset"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"github.com/VicoAritonang/lab-of-night-and-flame/internal/perf"
+	"github.com/VicoAritonang/lab-of-night-and-flame/internal/quality"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/queue"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/tracelab"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/workbench"
+	"time"
 )
 
 func (e *Engine) Handle(ctx context.Context, job *queue.Job) (M, error) {
@@ -172,7 +175,21 @@ func (e *Engine) Handle(ctx context.Context, job *queue.Job) (M, error) {
 		p["request"] = play["request"]
 		return w.Playground(ctx, p)
 	case "trace.summarize":
-		return tracelab.Summarize(ctx, w.DB, domain.Str(p["trace_id"]))
+		result, err := tracelab.Summarize(ctx, w.DB, domain.Str(p["trace_id"]))
+		if err != nil {
+			return nil, err
+		}
+		// Finished traces feed the online evaluators.
+		if _, err = quality.Dispatch(ctx, w.DB, w.Q, domain.Str(p["trace_id"])); err != nil {
+			return nil, err
+		}
+		return result, nil
+	case "trace.evaluate":
+		return quality.Evaluate(ctx, w.DB, w.Reg, domain.Str(p["trace_id"]), domain.Str(p["evaluator_id"]))
+	case "alerts.check":
+		return quality.Check(ctx, w.DB)
+	case "perf.run":
+		return perf.Execute(ctx, w.DB, w.Reg, domain.Str(p["run_id"]))
 	case "trace.export":
 		id := domain.Str(p["trace_id"])
 		detail, events, err := tracelab.Snapshot(ctx, w.DB, id)
@@ -190,4 +207,35 @@ func (e *Engine) Handle(ctx context.Context, job *queue.Job) (M, error) {
 }
 func validation(err error) M {
 	return M{"validation_error": true, "message": err.Error(), "errors": []string{}}
+}
+
+// Periodic enqueues periodic jobs (alert rule checks, once a minute per
+// project with rules) until ctx ends. Job dedup keys make concurrent
+// schedulers on several gateways harmless.
+func Periodic(ctx context.Context, db *store.Store, q *queue.Queue) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-t.C:
+			rows, err := db.Pool.Query(ctx, "SELECT DISTINCT project_id FROM arl.documents WHERE kind=$1 AND data->>'enabled'='true'", quality.Alerts)
+			if err != nil {
+				continue
+			}
+			projects := []string{}
+			for rows.Next() {
+				var p string
+				if rows.Scan(&p) == nil {
+					projects = append(projects, p)
+				}
+			}
+			rows.Close()
+			minute := now.UTC().Format("200601021504")
+			for _, p := range projects {
+				_, _ = q.Scope(p).Enqueue(ctx, "alerts.check", M{}, "alerts:"+minute)
+			}
+		}
+	}
 }

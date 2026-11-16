@@ -7,6 +7,7 @@ import (
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/provider"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/scoring"
+	"github.com/VicoAritonang/lab-of-night-and-flame/internal/stats"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
 	"math"
 	"math/rand"
@@ -356,7 +357,14 @@ func Preflight(ctx context.Context, s *store.Store, r *provider.Registry, p M) (
 	if budget["max_usd"] != nil && high > domain.Num(budget["max_usd"]) {
 		warns = append(warns, "Worst-case cost exceeds budget cap")
 	}
-	return M{"ok": len(errs) == 0, "errors": errs, "warnings": warns, "arms": arms, "samples": len(samples), "trials": trials, "calls_estimate": trials, "judge_calls_estimate": judgeCalls, "cost_low_usd": low, "cost_high_usd": high, "unknown_price_arms": unique(unknown), "disclosure": disclosure, "plan_digest": domain.Hash(p), "labels": labels}, nil
+	// Statistical power of the paired comparison this plan can support: the
+	// smallest pass-rate difference (from a 50% or 80% baseline) detectable at
+	// alpha=0.05 with 80% power, and the samples needed for a 5-point change.
+	power := M{"alpha": 0.05, "power": 0.8, "samples_per_arm": len(samples), "mde_at_50": stats.MinimumDetectable(0.5, len(samples), 0.05, 0.8), "mde_at_80": stats.MinimumDetectable(0.8, len(samples), 0.05, 0.8), "samples_for_5pt_at_80": stats.SampleSize(0.8, 0.85, 0.05, 0.8), "method": "two-proportion normal approximation with Cohen's h (conservative for paired designs)"}
+	if len(arms) > 1 && len(samples) > 0 && domain.Num(power["mde_at_80"]) > 0.15 {
+		warns = append(warns, fmt.Sprintf("Underpowered: with %d samples only differences of about %.0f points are reliably detectable", len(samples), domain.Num(power["mde_at_80"])*100))
+	}
+	return M{"ok": len(errs) == 0, "errors": errs, "warnings": warns, "arms": arms, "samples": len(samples), "trials": trials, "calls_estimate": trials, "judge_calls_estimate": judgeCalls, "cost_low_usd": low, "cost_high_usd": high, "unknown_price_arms": unique(unknown), "disclosure": disclosure, "plan_digest": domain.Hash(p), "labels": labels, "power": power}, nil
 }
 func Schedule(arms, samples []M, proto M) []M {
 	rng := rand.New(rand.NewSource(int64(domain.Num(proto["seed"]))))

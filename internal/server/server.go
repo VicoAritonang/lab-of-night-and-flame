@@ -27,7 +27,7 @@ import (
 type M = domain.M
 
 // Version is overridden at build time with -ldflags "-X .../internal/server.Version=v1.2.3".
-var Version = "0.3.0-dev"
+var Version = "0.4.0-dev"
 
 type Server struct {
 	Config                      config.Config
@@ -125,6 +125,10 @@ func (s *Server) Handler() http.Handler {
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Lab-Project, Last-Event-ID, Idempotency-Key")
 			w.WriteHeader(204)
 			return
+		}
+		if r.URL.Path == "/v1/traces" {
+			// OTLP exporters configured with the lab root as endpoint.
+			r.URL.Path = "/api/otel/v1/traces"
 		}
 		if s.UI != nil && !strings.HasPrefix(r.URL.Path, "/api/") {
 			s.static(w, r)
@@ -294,10 +298,17 @@ func (s *Server) routes() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, "<!doctype html><title>ARL Go API</title><h1>Agent Reliability Lab · Go API</h1><p><a href='/api/openapi.json'>OpenAPI document</a> · <a href='/api/agent-lab/connection.md'>WebSocket and backend integration</a></p><p>SYNC HTTP facade and persistent ASYNC jobs. X-Lab-Job-ID identifies durable jobs.</p>")
 	})
+	s.Mux.HandleFunc("POST /api/otel/v1/traces", s.otlpTraces)
+	s.route("GET /api/otel/v1/traces", otlpInfo)
 	s.datasetRoutes()
 	s.campaignRoutes()
 	s.traceRoutes()
 	s.workbenchRoutes()
+	s.monitorRoutes()
+	s.qualityRoutes()
+	s.promptRoutes()
+	s.suiteRoutes()
+	s.perfRoutes()
 }
 
 // static serves the embedded single-page UI; unknown paths fall back to index.html.

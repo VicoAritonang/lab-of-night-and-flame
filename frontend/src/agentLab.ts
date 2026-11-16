@@ -15,6 +15,7 @@ export interface LabStatus { listening: boolean; active_connections: number; con
 export interface RunDetail extends LabRun {
   config: { lab: string; phases: string[]; capabilities: string[]; metadata: Record<string, any> };
   check_config: Record<string, any>;
+  thread_id?: string | null; user_id?: string | null; tags?: string[]; source?: string;
   summary: {
     events: number; visits: number; unique_nodes: number; retries: number; tool_calls: number; duration_ms: number;
     phases: Record<string, number>; verdict: string;

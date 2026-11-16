@@ -18,7 +18,7 @@ Thanks for helping make AI agents easier to test. Issues and pull requests are w
 | Integration tests | an **isolated** database initialised with `sql/init.sql` | `ARL_TEST_DB_URL=postgres://…/arl_test go test -p 1 ./...` |
 | UI | Node 22 | `cd frontend && npm ci && npm run dev` (proxies `/api` to `:8000`) |
 | Go SDK | Go 1.23+ | `cd sdk/go && go test ./...` |
-| Python SDK | Python 3.9+ | `cd sdk/python && pip install -e ".[test]" && pytest` |
+| Python SDK | Python 3.10+ | `cd sdk/python && pip install -e ".[test]" && pytest` |
 | TypeScript SDK | Node 22 | `cd sdk/typescript && npm install && npm test` |
 
 Run the whole stack with `docker compose up --build`, or the example agent loop
@@ -31,13 +31,44 @@ never point them at a database holding real data.
 
 Push a tag `vX.Y.Z` on `main`. The release workflow then:
 
-- tags `sdk/go/vX.Y.Z` so `go get go.vicoworks.com/arl@vX.Y.Z` works, and warms
-  proxy.golang.org / pkg.go.dev;
+- tags `sdk/go/vX.Y.Z` (the Go SDK is a module in a subdirectory, so its
+  versions are `sdk/go/…` tags), then runs
+  [.github/scripts/go-sdk-publish.sh](.github/scripts/go-sdk-publish.sh): it checks
+  the vanity host, resolves the version through proxy.golang.org, builds a fresh
+  consumer module with `go get go.vicoworks.com/agent-reliability-lab@vX.Y.Z`
+  and asks pkg.go.dev to index it;
 - publishes the Docker image to GHCR and the Python/npm SDKs.
 
 Keep `sdk/python/pyproject.toml`, `sdk/python/src/arl_lab/__init__.py` and
-`sdk/typescript/package.json` versions equal to the tag. The vanity host is a
-Cloudflare Worker in [deploy/go-vanity](deploy/go-vanity/README.md).
+`sdk/typescript/package.json` versions equal to the tag.
+
+To release only the Go SDK, push a tag `sdk/go/vX.Y.Z`, or run the *Go SDK
+publish* workflow manually for an existing tag (useful after fixing the vanity
+host).
+
+### Go vanity import path
+
+`go.vicoworks.com` is served by a shared vanity worker outside this
+repository. The module must be registered there as:
+
+| Field | Value |
+| --- | --- |
+| Import path | `go.vicoworks.com/agent-reliability-lab` |
+| VCS | `git` |
+| Repository | `https://github.com/VicoAritonang/lab-of-night-and-flame` |
+| Subdirectory | `sdk/go` |
+
+which serves, for `https://go.vicoworks.com/agent-reliability-lab?go-get=1`
+(and any sub-package path):
+
+```html
+<meta name="go-import" content="go.vicoworks.com/agent-reliability-lab git https://github.com/VicoAritonang/lab-of-night-and-flame sdk/go">
+```
+
+The subdirectory field is read by the go command since Go 1.25 and by
+proxy.golang.org, so users on older Go resolve the module through the default
+`GOPROXY`. Optionally add `go-source` for pkg.go.dev source links:
+`go.vicoworks.com/agent-reliability-lab https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go{/dir} https://github.com/VicoAritonang/lab-of-night-and-flame/blob/main/sdk/go{/dir}/{file}#L{line}`.
 
 ## Pull requests
 

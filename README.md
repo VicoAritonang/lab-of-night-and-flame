@@ -12,7 +12,31 @@ your agent, and you get:
   as a full agent replay executed by your own code, or as a single LLM step the lab
   calls directly. Every run is stored for side-by-side comparison with a word diff.
 - **Experiments** — benchmark models on datasets with seeded schedules, retries,
-  budgets, scorers/judges, confidence intervals, paired comparisons and reports.
+  budgets, scorers/judges, confidence intervals, paired comparisons (with Holm /
+  Benjamini–Hochberg correction and effect sizes), power analysis and reports.
+- **OpenTelemetry ingestion** — any agent framework that exports OTel GenAI or
+  OpenInference spans (OpenAI Agents SDK, LangGraph, LlamaIndex, Vercel AI SDK,
+  Pydantic AI, ADK, …) shows up as lab traces, no lab SDK required.
+- **Monitor** — production-style dashboards: volume, error rate, p50/p95/p99,
+  tokens and cost over time, per model / tool / service, threads and users, and a
+  filterable trace explorer.
+- **Quality loop** — end-user and reviewer feedback, annotation queues with
+  rubrics, inter-annotator agreement (Krippendorff's α, Cohen's κ) and LLM-judge
+  calibration against humans, online evaluators on sampled traces, and alert
+  rules with webhooks.
+- **Agent-trajectory checks** — required tools, tool order, step budgets, output
+  regex / JSON schema / canary leaks, on live traces and Workbench runs.
+- **Prompt registry** — immutable prompt versions with `production` / `staging`
+  labels, diff and render; agents fetch them with `lab.prompt(...)` and a fallback.
+- **Regression suites** — run a Workbench collection with a new model or prompt,
+  repeated, compare with a baseline and gate CI (`arl suite …`, exit code 1 on
+  regression).
+- **Perf lab** — load-test any endpoint (including local models on your
+  hardware): TTFT, latency percentiles, decode tokens/s and throughput per
+  concurrency level, with the saturation point.
+- **Safety probes** — a built-in red-team dataset (harmful requests, over-refusal,
+  prompt injection, system-prompt extraction, PII leakage) with refusal and
+  canary-leak scorers.
 
 The SDKs are no-ops outside `STAGE=dev`, so the instrumentation stays in your code
 and costs nothing in production.
@@ -63,7 +87,7 @@ docker compose -f examples/compose/docker-compose.yml up -d --build
    | --- | --- | --- |
    | Python | `pip install arl-lab` | [sdk/python](sdk/python/README.md) |
    | TypeScript / JS | `npm install arl-lab` | [sdk/typescript](sdk/typescript/README.md) |
-   | Go | `go get go.vicoworks.com/arl@latest` | [sdk/go](sdk/go/README.md) |
+   | Go | `go get go.vicoworks.com/agent-reliability-lab@latest` | [sdk/go](sdk/go/README.md) |
    | Anything else | JSON over WebSocket | [connection.md](connection.md) |
 
    ```python
@@ -94,6 +118,30 @@ docker compose -f examples/compose/docker-compose.yml up -d --build
 3. **Use the UI**: *Agent lab* shows live traces; *Workbench* turns any trace into
    an editable scenario (`Open in Workbench` on a trace, or *Capture from trace*).
 
+### Already using OpenTelemetry?
+
+Skip the SDK and point the exporter at the lab (protobuf or JSON, gzip OK):
+
+```bash
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:8000/api/otel/v1/traces
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer $ARL_AUTH_TOKEN"   # only if auth is on
+```
+
+Chat, tool, agent and retrieval spans become model calls (re-sendable from the
+Workbench), tool calls, an agent graph and retrieval spans. Attribute mapping is
+documented in [connection.md](connection.md#opentelemetry-otlp--framework-apa-pun-tanpa-sdk-lab).
+
+### Feedback, prompts and threads from the SDK
+
+```python
+prompt = lab.prompt("support.answer", fallback="You are a support agent.")  # production label
+with lab.run("Support question", run_id=request_id, thread_id=conversation_id, user_id=user.id) as run:
+    run.snapshot(config={"model": model, "prompt": prompt.ref})
+    messages = prompt.render(company="Acme", question=question)
+    ...
+lab.feedback("thumbs", True, run_id=request_id)          # later, from your API
+```
+
 ## The Workbench flow
 
 ```mermaid
@@ -117,6 +165,21 @@ sequenceDiagram
 
 Scenarios are grouped into collections and can be exported/imported as JSON
 (`arl-workbench/1`) to share with your team or keep in the repository.
+
+## Regression suites in CI
+
+Keep a Workbench collection in your repository (export it as `arl-workbench/1`),
+then gate merges on it with the lab image:
+
+```bash
+docker run --rm --network host ghcr.io/vicoaritonang/agent-reliability-lab:latest suite \
+  --url http://localhost:8000 --collection support --model gpt-4.1-mini \
+  --repeats 3 --baseline latest --min-pass-rate 0.9 --max-regressions 0
+```
+
+Exit code 0 means the gate passed, 1 that it failed, 2 a usage or connection
+error. A complete GitHub Actions job is in
+[examples/ci/agent-regression.yml](examples/ci/agent-regression.yml).
 
 ## Configuration
 
@@ -158,10 +221,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## Roadmap
 
-- OpenAI-compatible capture proxy (point `base_url` at the lab, zero code changes)
-- OpenTelemetry GenAI span import
-- Batch-run a collection against a model matrix from the Workbench
-- Workbench scenarios as CI regression tests (`arl test collection.json`)
+The feature research behind this release — what leading evaluation and
+observability platforms and research evaluation frameworks provide, and what the
+lab still lacks — is in [ROADMAP.md](ROADMAP.md).
 
 ## License
 

@@ -38,3 +38,15 @@ resolves immediately. Default mode is fail-open; set `required: true` for strict
 integration tests. On Node < 22 pass `WebSocket` from the `ws` package via options.
 
 The protocol is documented in [connection.md](../../connection.md).
+
+## Feedback, prompts and threads
+
+```ts
+const prompt = await lab.prompt("support.answer", { fallback: "You are a support agent." }); // production label
+const run = await lab.startRun("Support question", { runId: requestId, threadId: conversationId, userId, tags: ["beta"] });
+await run.snapshot({}, { model, prompt: prompt.ref });
+const messages = prompt.render({ company: "Acme", question });
+// ...
+await lab.feedback("thumbs", true, { runId: requestId });  // later, from your API
+```
+

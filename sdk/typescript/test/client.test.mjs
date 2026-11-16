@@ -94,3 +94,53 @@ test("rejections are fail-open unless required; disabled outside dev", async () 
   const off = await new Lab("ts-agent", { url: "ws://lab", stage: "production", WebSocket }).connect();
   assert.equal((await off.startRun("z")).traceId, null);
 });
+
+function fakeFetch(routes) {
+  const calls = [];
+  const fetch = async (url, init) => {
+    const path = url.replace(/^https?:\/\/[^/]+/, "");
+    calls.push({ path, method: init.method, body: init.body ? JSON.parse(init.body) : undefined, headers: init.headers });
+    const [status, payload] = routes[`${init.method} ${path}`] ?? [404, { detail: "resource not found" }];
+    return { ok: status < 400, status, json: async () => payload };
+  };
+  return { calls, fetch };
+}
+
+test("prompt registry: fetch, cache, render, fallback", async () => {
+  const version = { prompt: "support", version: 3, template: { system: "You help {{company}}.", messages: [{ role: "user", content: "{{ q }} ({{meta.lang}})" }] }, config: { model: "m-1" } };
+  const { calls, fetch } = fakeFetch({ "GET /api/prompts/support": [200, version], "GET /api/prompts/support?label=staging": [200, { ...version, version: 4 }] });
+  const lab = new Lab("svc", { url: "ws://lab/api/agent-lab/ws", stage: "dev", token: "tok", fetch, logger: { warn() {} } });
+  const p = await lab.prompt("support");
+  assert.equal(p.version, 3);
+  assert.deepEqual(p.ref, { name: "support", version: 3 });
+  assert.deepEqual(p.render({ company: "Acme", q: "Hi", meta: { lang: "id" } }), [{ role: "system", content: "You help Acme." }, { role: "user", content: "Hi (id)" }]);
+  assert.equal(p.render({ company: "Acme" })[1].content, "{{ q }} ({{meta.lang}})");
+  await lab.prompt("support");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].headers.Authorization, "Bearer tok");
+  assert.equal((await lab.prompt("support", { label: "staging" })).version, 4);
+  const fallback = await lab.prompt("other", { fallback: "Be kind." });
+  assert.equal(fallback.version, null);
+  await assert.rejects(lab.prompt("other"));
+  const off = new Lab("svc", { stage: "prod" });
+  assert.equal((await off.prompt("support", { fallback: { system: "Local" } })).system, "Local");
+});
+
+test("feedback by run id and trace id; run metadata and environment", async () => {
+  const { calls, fetch } = fakeFetch({ "POST /api/feedback": [200, { id: "fb_1" }] });
+  const { state, WebSocket } = fakeLab();
+  const lab = await new Lab("svc", { url: "ws://lab/api/agent-lab/ws", stage: "dev", required: true, WebSocket, fetch }).connect();
+  assert.deepEqual(await lab.feedback("thumbs", true, { runId: "r-9" }), { id: "fb_1" });
+  const run = await lab.startRun("turn", { threadId: "conv-1", userId: "u-7", tags: ["beta"] });
+  await run.feedback("self_check", 0.5);
+  lab.close();
+  assert.equal(calls[0].body.run_id, "r-9");
+  assert.equal(calls[0].body.service, "svc");
+  assert.equal(calls[1].body.trace_id, "trace-1");
+  assert.equal(calls[1].body.source, "sdk");
+  const start = state.events[0].data;
+  assert.equal(start.thread_id, "conv-1");
+  assert.deepEqual(start.tags, ["beta"]);
+  assert.match(state.hellos[0].metadata.environment.runtime, /^node /);
+  assert.equal(await new Lab("svc", { stage: "prod" }).feedback("x", 1, { runId: "r" }), null);
+});

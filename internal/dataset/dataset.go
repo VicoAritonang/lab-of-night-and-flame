@@ -407,6 +407,9 @@ func Seed(ctx context.Context, s *store.Store) (M, error) {
 			return nil, e
 		}
 	}
+	safety, probes := Safety()
+	data.Samples = append(data.Samples, probes...)
+	data.Datasets = append(data.Datasets, safety)
 	if e = s.Batch(ctx, "samples", data.Samples); e != nil {
 		return nil, e
 	}

@@ -12,8 +12,10 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+	go.opentelemetry.io/proto/otlp v1.11.0
 	golang.org/x/image v0.47.0
 	golang.org/x/text v0.43.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -32,8 +34,8 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	go.vicoworks.com/arl v0.0.0
+	go.vicoworks.com/agent-reliability-lab v0.0.0
 	golang.org/x/sync v0.24.0 // indirect
 )
 
-replace go.vicoworks.com/arl => ./sdk/go
+replace go.vicoworks.com/agent-reliability-lab => ./sdk/go

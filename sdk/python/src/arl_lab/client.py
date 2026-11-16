@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import queue
+import re
 import threading
 import time
 import traceback
@@ -139,6 +140,8 @@ class Lab:
         self.phases = list(phases or DEFAULT_PHASES)
         self.capabilities = list(capabilities or [])
         self.metadata = dict(metadata or {})
+        self.metadata.setdefault("environment", _environment())
+        self._prompts: Dict[Any, Any] = {}
         self.required = os.getenv("LAB_REQUIRED") == "true" if required is None else required
         self.timeout = timeout
         self.enabled = self.stage.lower() == "dev" and bool(self.url)
@@ -344,9 +347,77 @@ class Lab:
                 self._failure(e)
                 return {}
 
-    def run(self, name: str, *, run_id: Optional[str] = None, checks: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None) -> "Run":
-        """Start a run. Use as a context manager to end it automatically."""
-        return Run(self, name, run_id=run_id, checks=checks, data=data)
+    def run(self, name: str, *, run_id: Optional[str] = None, checks: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None, thread_id: Optional[str] = None, user_id: Optional[str] = None, tags: Optional[List[str]] = None) -> "Run":
+        """Start a run. Use as a context manager to end it automatically.
+
+        ``thread_id`` groups the turns of one conversation, ``user_id`` the
+        runs of one end user, and ``tags`` label runs for filtering."""
+        extra = dict(data or {})
+        for key, value in (("thread_id", thread_id), ("user_id", user_id), ("tags", list(tags) if tags else None)):
+            if value:
+                extra[key] = value
+        return Run(self, name, run_id=run_id, checks=checks, data=extra)
+
+    def _http(self, method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
+        import urllib.request
+
+        data = None if body is None else json.dumps(body).encode()
+        req = urllib.request.Request(self.http_base() + path, data=data, method=method)
+        req.add_header("Content-Type", "application/json")
+        if self.token:
+            req.add_header("Authorization", f"Bearer {self.token}")
+        if self.project:
+            req.add_header("X-Lab-Project", self.project)
+        with urllib.request.urlopen(req, timeout=self.timeout * 2) as res:
+            return json.loads(res.read() or b"null")
+
+    def feedback(self, name: str, value: Any = None, *, trace_id: Optional[str] = None, run_id: Optional[str] = None, label: Optional[str] = None, comment: Optional[str] = None, source: str = "user", author: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """Attach feedback to a run, e.g. an end user's thumbs-up.
+
+        Identify the run by ``trace_id`` or by your own ``run_id`` (the id
+        passed to :meth:`run`). ``value`` is a number or boolean."""
+        if not self.enabled:
+            return None
+        body: Dict[str, Any] = {"name": name, "value": value, "label": label, "comment": comment, "source": source, "metadata": metadata or {}}
+        if author:
+            body["author"] = author
+        if trace_id:
+            body["trace_id"] = trace_id
+        else:
+            body["run_id"], body["service"] = run_id, self.service
+        try:
+            return self._http("POST", "/api/feedback", body)
+        except Exception as e:
+            if self.required:
+                raise
+            log.warning("lab feedback not recorded: %s", e)
+            return None
+
+    def prompt(self, name: str, *, label: Optional[str] = None, version: Optional[int] = None, fallback: Any = None, cache_seconds: float = 60.0) -> "Prompt":
+        """Fetch a prompt version from the lab's registry.
+
+        Without ``label``/``version`` the "production" label is used (else the
+        latest version). ``fallback`` (a system prompt string or a
+        ``{"system": ..., "messages": [...]}`` template) is returned when the lab
+        is disabled or unreachable, so production code keeps working."""
+        key = (name, label, version)
+        cached = self._prompts.get(key)
+        if cached and time.monotonic() - cached[0] < cache_seconds:
+            return cached[1]
+        if self.enabled:
+            query = f"?version={int(version)}" if version else (f"?label={label}" if label else "")
+            try:
+                found = Prompt.from_version(self._http("GET", f"/api/prompts/{name}{query}"))
+                self._prompts[key] = (time.monotonic(), found)
+                return found
+            except Exception as e:
+                if self.required and fallback is None:
+                    raise
+                log.warning("lab prompt %s unavailable, using fallback: %s", name, e)
+        if fallback is None:
+            raise LookupError(f"prompt {name!r} is unavailable and no fallback was given")
+        template = {"system": fallback} if isinstance(fallback, str) else dict(fallback)
+        return Prompt(name=name, version=None, system=template.get("system", ""), messages=list(template.get("messages", [])), config=dict(template.get("config", {})))
 
     def upload_image(self, name: str, content: bytes) -> Optional[Dict[str, Any]]:
         """Store an image so events can reference {"type": "image", "artifact": digest}."""
@@ -420,6 +491,62 @@ class Lab:
 
 async def _await(result: Any) -> Any:
     return await result
+
+
+_VARIABLE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}")
+
+
+def _environment() -> Dict[str, Any]:
+    """Runtime facts for comparing runs across machines (no host names)."""
+    import platform
+
+    env: Dict[str, Any] = {"runtime": "python " + platform.python_version(), "os": platform.system().lower(), "arch": platform.machine(), "cpus": os.cpu_count()}
+    for var in ("CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES"):
+        if os.getenv(var):
+            env["gpus"] = os.getenv(var)
+    return env
+
+
+@dataclass
+class Prompt:
+    """A prompt version from the lab registry (or a local fallback)."""
+
+    name: str
+    version: Optional[int]
+    system: str = ""
+    messages: List[Dict[str, Any]] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_version(cls, v: Dict[str, Any]) -> "Prompt":
+        t = v.get("template") or {}
+        return cls(name=v.get("prompt", ""), version=v.get("version"), system=t.get("system", ""), messages=list(t.get("messages") or []), config=dict(v.get("config") or {}))
+
+    @property
+    def ref(self) -> Dict[str, Any]:
+        """Record this in ``run.snapshot(config=...)`` to know which version ran."""
+        return {"name": self.name, "version": self.version}
+
+    @staticmethod
+    def _fill(text_value: str, variables: Dict[str, Any]) -> str:
+        def sub(m: "re.Match[str]") -> str:
+            value: Any = variables
+            for part in m.group(1).split("."):
+                if not isinstance(value, dict) or part not in value:
+                    return m.group(0)
+                value = value[part]
+            return value if isinstance(value, str) else json.dumps(value)
+
+        return _VARIABLE.sub(sub, text_value)
+
+    def render_system(self, **variables: Any) -> str:
+        return self._fill(self.system, variables)
+
+    def render(self, **variables: Any) -> List[Dict[str, Any]]:
+        """Chat messages with ``{{variables}}`` filled in."""
+        out = [{"role": "system", "content": self._fill(self.system, variables)}] if self.system else []
+        out += [{"role": m["role"], "content": self._fill(m["content"], variables)} for m in self.messages]
+        return out
 
 
 class Run:
@@ -513,6 +640,13 @@ class Run:
 
     def output(self, content: Any) -> None:
         self.emit("output", self.phase("output"), {"content": self._parts(content)})
+
+    def feedback(self, name: str, value: Any = None, **kw: Any) -> Optional[Dict[str, Any]]:
+        """Attach feedback (e.g. an automated self-check) to this run."""
+        kw.setdefault("source", "sdk")
+        if self.trace_id:
+            return self.lab.feedback(name, value, trace_id=self.trace_id, **kw)
+        return self.lab.feedback(name, value, run_id=self.id, **kw)
 
     def end(self, status: str = "completed") -> None:
         if self.ended:

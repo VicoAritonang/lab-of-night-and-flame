@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
+	"github.com/VicoAritonang/lab-of-night-and-flame/internal/scoring"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/store"
 	"github.com/coder/websocket"
 	"github.com/jackc/pgx/v5"
@@ -102,11 +103,29 @@ func Checks(raw M) (M, error) {
 	out := M{"max_cost_usd": nil, "max_latency_ms": nil, "max_retries": nil, "output_contains": []string{}, "required_nodes": []string{}, "forbidden_tools": []string{}}
 	for k, v := range raw {
 		switch k {
-		case "max_cost_usd", "max_latency_ms", "max_retries":
-			if v != nil && (!finite(v, true) || (k == "max_retries" && domain.Num(v) != math.Trunc(domain.Num(v)))) {
+		case "max_cost_usd", "max_latency_ms", "max_retries", "max_tool_calls", "max_model_calls":
+			if v != nil && (!finite(v, true) || (k != "max_cost_usd" && k != "max_latency_ms" && domain.Num(v) != math.Trunc(domain.Num(v)))) {
 				return nil, errors.New("invalid numeric check")
 			}
-		case "output_contains", "required_nodes", "forbidden_tools":
+		case "output_regex":
+			pattern, ok := v.(string)
+			if v != nil && (!ok || len(pattern) > 2000) {
+				return nil, errors.New("output_regex must be a string")
+			}
+			if _, e := regexp.Compile(pattern); e != nil {
+				return nil, errors.New("output_regex is not a valid regular expression")
+			}
+		case "output_json_schema":
+			if v != nil {
+				schema, ok := v.(map[string]any)
+				if !ok {
+					return nil, errors.New("output_json_schema must be an object")
+				}
+				if e := scoring.Validate(M{"key": "json_schema", "params": M{"schema": schema}}); e != nil {
+					return nil, errors.New("output_json_schema is not a valid JSON schema")
+				}
+			}
+		case "output_contains", "output_not_contains", "required_nodes", "forbidden_tools", "required_tools", "tool_sequence":
 			a, ok := v.([]any)
 			if !ok {
 				if _, valid := v.([]string); !valid {
@@ -128,6 +147,70 @@ func Checks(raw M) (M, error) {
 		out[k] = v
 	}
 	return out, nil
+}
+
+// OutputChecks evaluates the checks that only need the final output text.
+// has=false means the run produced no output yet, so text checks are unknown.
+func OutputChecks(config M, text string, has bool) []M {
+	out := []M{}
+	add := func(name string, passed any, evidence M) {
+		if !has {
+			passed = nil
+		}
+		out = append(out, M{"name": name, "passed": passed, "evidence": evidence})
+	}
+	for _, term := range domain.Strings(config["output_contains"]) {
+		add("Output contains: "+term, strings.Contains(text, term), M{"expected": term})
+	}
+	for _, term := range domain.Strings(config["output_not_contains"]) {
+		add("Output excludes: "+term, !strings.Contains(text, term), M{"forbidden": term})
+	}
+	if pattern := domain.Str(config["output_regex"]); pattern != "" {
+		rx, e := regexp.Compile(pattern)
+		add("Output matches /"+pattern+"/", e == nil && rx.MatchString(text), M{"pattern": pattern})
+	}
+	if schema := domain.Obj(config["output_json_schema"]); len(schema) > 0 {
+		v := scoring.Run(M{"key": "json_schema", "params": M{"schema": schema}}, text, nil, nil)
+		add("Output matches JSON schema", v.Verdict == "pass", v.Evidence)
+	}
+	return out
+}
+
+// ToolChecks evaluates the agent trajectory: which tools ran, in what order and
+// how often. tools is the ordered list of called tool names.
+func ToolChecks(config M, tools []string, modelCalls int, terminal bool) []M {
+	out := []M{}
+	add := func(name string, passed bool, evidence M) {
+		var p any = passed
+		if !terminal && !passed {
+			// A running agent can still call the missing tool.
+			p = nil
+		}
+		out = append(out, M{"name": name, "passed": p, "evidence": evidence})
+	}
+	called := map[string]int{}
+	for _, t := range tools {
+		called[t]++
+	}
+	for _, tool := range domain.Strings(config["required_tools"]) {
+		add("Called tool: "+tool, called[tool] > 0, M{"calls": called[tool]})
+	}
+	if seq := domain.Strings(config["tool_sequence"]); len(seq) > 0 {
+		next := 0
+		for _, t := range tools {
+			if next < len(seq) && t == seq[next] {
+				next++
+			}
+		}
+		add("Tool order: "+strings.Join(seq, " → "), next == len(seq), M{"expected": seq, "matched": next, "actual": tools})
+	}
+	if config["max_tool_calls"] != nil {
+		out = append(out, M{"name": "Tool calls", "passed": len(tools) <= domain.Int(config["max_tool_calls"]), "evidence": M{"actual": len(tools), "limit": config["max_tool_calls"]}})
+	}
+	if config["max_model_calls"] != nil {
+		out = append(out, M{"name": "Model calls", "passed": modelCalls <= domain.Int(config["max_model_calls"]), "evidence": M{"actual": modelCalls, "limit": config["max_model_calls"]}})
+	}
+	return out
 }
 func finite(v any, nonnegative bool) bool {
 	switch v.(type) {
@@ -398,7 +481,7 @@ func Validate(msg M) error {
 	if !ok {
 		return bad("validation_error", "data must be an object")
 	}
-	for _, k := range []string{"name", "label", "model", "category", "reason", "status", "from_node", "query", "tool", "call_id"} {
+	for _, k := range []string{"name", "label", "model", "category", "reason", "status", "from_node", "query", "tool", "call_id", "thread_id", "user_id"} {
 		if v, exists := d[k]; exists {
 			if _, ok := v.(string); !ok {
 				return bad("invalid_data", k+" must be a string")
@@ -438,6 +521,22 @@ func Validate(msg M) error {
 	if event == "run.start" {
 		if _, e := Checks(domain.Obj(d["checks"])); e != nil {
 			return bad("invalid_data", e.Error())
+		}
+		for _, k := range []string{"thread_id", "user_id"} {
+			if len(domain.Str(d[k])) > 200 {
+				return bad("invalid_data", k+" exceeds 200 characters")
+			}
+		}
+		if tags, exists := d["tags"]; exists && tags != nil {
+			list, ok := tags.([]any)
+			if !ok || len(list) > 32 {
+				return bad("invalid_data", "tags must be an array of at most 32 strings")
+			}
+			for _, t := range list {
+				if s, ok := t.(string); !ok || s == "" || len(s) > 100 {
+					return bad("invalid_data", "tags must be nonempty strings of at most 100 characters")
+				}
+			}
 		}
 	}
 	if event == "state.snapshot" {
@@ -518,7 +617,58 @@ func price(d, config M) (M, error) {
 	}
 	return out, nil
 }
+
+// IngestOptions adapts ingestion for telemetry that does not come from a live
+// arl/1 socket (OpenTelemetry export batches).
+type IngestOptions struct {
+	// Source is recorded on new traces ("sdk" or "otlp").
+	Source string
+	// Late accepts events for a run that already ended (spans exported after
+	// their root) without reopening it.
+	Late bool
+	// ClientTime uses the event timestamp as the trace start instead of the
+	// server clock.
+	ClientTime bool
+	// Passive leaves the session's connection lease untouched.
+	Passive bool
+}
+
 func Ingest(ctx context.Context, s *store.Store, sid string, msg M) (M, error) {
+	return IngestWith(ctx, s, sid, msg, IngestOptions{Source: "sdk"})
+}
+
+// rollup is the per-event increment of a trace's monitoring columns.
+type rollup struct {
+	cost                         float64
+	tokensIn, tokensOut          int
+	modelCalls, toolCalls, fails int
+	model                        string
+}
+
+func rollupOf(event string, d M) rollup {
+	r := rollup{}
+	switch event {
+	case "cost.record":
+		r.cost = domain.Num(d["amount_usd"])
+		r.tokensIn, r.tokensOut = domain.Int(d["tokens_in"]), domain.Int(d["tokens_out"])
+	case "model.request":
+		r.modelCalls, r.model = 1, domain.Str(d["model"])
+		if len(r.model) > 200 {
+			r.model = r.model[:200]
+		}
+	case "tool.call":
+		r.toolCalls = 1
+	}
+	if event == "error" || d["status"] == "error" {
+		r.fails = 1
+	}
+	return r
+}
+
+func IngestWith(ctx context.Context, s *store.Store, sid string, msg M, opts IngestOptions) (M, error) {
+	if opts.Source == "" {
+		opts.Source = "sdk"
+	}
 	if e := Validate(msg); e != nil {
 		return nil, e
 	}
@@ -565,7 +715,23 @@ func Ingest(ctx context.Context, s *store.Store, sid string, msg M) (M, error) {
 		if name == "" {
 			name = domain.Str(clean["run_id"])
 		}
-		_, e = tx.Exec(ctx, "INSERT INTO arl.traces(id,project_id,session_id,external_id,name,checks,started_at) VALUES($1,$2,$3,$4,$5,$6,$7)", rid, s.Project, sid, clean["run_id"], name, domain.JSONB(checks), domain.Now())
+		started := domain.Now()
+		if opts.ClientTime && clean["timestamp"] != nil {
+			started = domain.Num(clean["timestamp"])
+		}
+		var thread, user any
+		if v := domain.Str(d["thread_id"]); v != "" {
+			thread = v
+		}
+		if v := domain.Str(d["user_id"]); v != "" {
+			user = v
+		}
+		tags := domain.Strings(d["tags"])
+		if tags == nil {
+			tags = []string{}
+		}
+		status = "running"
+		_, e = tx.Exec(ctx, "INSERT INTO arl.traces(id,project_id,session_id,external_id,name,checks,started_at,thread_id,user_id,tags,source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", rid, s.Project, sid, clean["run_id"], name, domain.JSONB(checks), started, thread, user, tags, opts.Source)
 		if e != nil {
 			return nil, e
 		}
@@ -575,7 +741,7 @@ func Ingest(ctx context.Context, s *store.Store, sid string, msg M) (M, error) {
 		if event == "run.start" {
 			return nil, bad("run_exists", "Use a new run_id")
 		}
-		if status != "running" {
+		if status != "running" && (!opts.Late || event == "run.end") {
 			return nil, bad("run_closed", "run.end is final; use another run_id")
 		}
 	}
@@ -616,20 +782,35 @@ func Ingest(ctx context.Context, s *store.Store, sid string, msg M) (M, error) {
 	if e != nil {
 		return nil, e
 	}
-	status = "running"
-	var finished any
+	// A late event (status already final) leaves status and finish time alone.
+	keep := status != "running"
+	var finished, duration any
 	if event == "run.end" {
 		status = domain.Str(d["status"])
 		if status == "" {
 			status = "completed"
 		}
 		finished = now
+		if opts.ClientTime && clean["timestamp"] != nil {
+			finished = domain.Num(clean["timestamp"])
+		}
+		if d["duration_ms"] != nil {
+			duration = domain.Num(d["duration_ms"])
+		}
 	}
-	_, e = tx.Exec(ctx, "UPDATE arl.traces SET status=$2,finished_at=$3,event_count=event_count+1,total_bytes=total_bytes+$4 WHERE id=$1", rid, status, finished, size)
+	r := rollupOf(event, d)
+	_, e = tx.Exec(ctx, `UPDATE arl.traces SET status=CASE WHEN $5 THEN status ELSE $2 END,finished_at=CASE WHEN $5 THEN finished_at ELSE $3::float8 END,
+ duration_ms=CASE WHEN $5 THEN duration_ms WHEN $6::float8 IS NOT NULL THEN $6::float8 WHEN $3::float8 IS NOT NULL THEN GREATEST(0,($3::float8-started_at)*1000) ELSE duration_ms END,
+ event_count=event_count+1,total_bytes=total_bytes+$4,cost_usd=cost_usd+$7,tokens_in=tokens_in+$8,tokens_out=tokens_out+$9,model_calls=model_calls+$10,tool_calls=tool_calls+$11,errors=errors+$12,
+ models=CASE WHEN $13='' OR $13=ANY(models) OR cardinality(models)>=20 THEN models ELSE array_append(models,$13::text) END WHERE id=$1`, rid, status, finished, size, keep, duration, r.cost, r.tokensIn, r.tokensOut, r.modelCalls, r.toolCalls, r.fails, r.model)
 	if e != nil {
 		return nil, e
 	}
-	_, e = tx.Exec(ctx, "UPDATE arl.sessions SET last_seen=now(),connected_until=now()+interval '50 seconds' WHERE id=$1", sid)
+	if opts.Passive {
+		_, e = tx.Exec(ctx, "UPDATE arl.sessions SET last_seen=now() WHERE id=$1", sid)
+	} else {
+		_, e = tx.Exec(ctx, "UPDATE arl.sessions SET last_seen=now(),connected_until=now()+interval '50 seconds' WHERE id=$1", sid)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -648,19 +829,21 @@ type reader interface {
 }
 
 func detailQuery(ctx context.Context, db reader, project, rid string) (M, error) {
-	var id, sid, external, name, status, service string
+	var id, sid, external, name, status, service, source string
 	var checks, profile M
 	var started float64
 	var finished *float64
+	var thread, user *string
+	var tags []string
 	var count int
-	e := db.QueryRow(ctx, "SELECT r.id,r.session_id,r.external_id,r.name,r.status,r.checks,r.started_at,r.finished_at,r.event_count,s.service,s.config FROM arl.traces r JOIN arl.sessions s ON s.id=r.session_id WHERE r.id=$1 AND r.project_id=$2", rid, project).Scan(&id, &sid, &external, &name, &status, &checks, &started, &finished, &count, &service, &profile)
+	e := db.QueryRow(ctx, "SELECT r.id,r.session_id,r.external_id,r.name,r.status,r.checks,r.started_at,r.finished_at,r.event_count,s.service,s.config,r.thread_id,r.user_id,r.tags,r.source FROM arl.traces r JOIN arl.sessions s ON s.id=r.session_id WHERE r.id=$1 AND r.project_id=$2", rid, project).Scan(&id, &sid, &external, &name, &status, &checks, &started, &finished, &count, &service, &profile, &thread, &user, &tags, &source)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil, store.ErrNotFound
 	}
 	if e != nil {
 		return nil, e
 	}
-	return M{"id": id, "session_id": sid, "external_id": external, "name": name, "status": status, "check_config": checks, "started_at": started, "finished_at": finished, "event_count": count, "service": service, "config": profile, "lab": profile["lab"]}, nil
+	return M{"id": id, "session_id": sid, "external_id": external, "name": name, "status": status, "check_config": checks, "started_at": started, "finished_at": finished, "event_count": count, "service": service, "config": profile, "lab": profile["lab"], "thread_id": thread, "user_id": user, "tags": tags, "source": source}, nil
 }
 func Events(ctx context.Context, s *store.Store, rid string, after int64, limit int) ([]M, bool, error) {
 	return eventsQuery(ctx, s.Pool, s.Project, rid, after, limit)
@@ -714,6 +897,9 @@ func Summarize(ctx context.Context, s *store.Store, rid string) (M, error) {
 	if e = s.Put(ctx, "trace_summaries", rid, doc); e != nil {
 		return nil, e
 	}
+	if _, e = s.Pool.Exec(ctx, "UPDATE arl.traces SET verdict=$3 WHERE id=$1 AND project_id=$2", rid, s.Project, summary["verdict"]); e != nil {
+		return nil, e
+	}
 	return M{"result_kind": "trace_summaries", "result_id": rid}, nil
 }
 func Summary(run M, events []M) M {
@@ -722,6 +908,8 @@ func Summary(run M, events []M) M {
 	retry, tools := 0, 0
 	expected := map[string]bool{}
 	toolNames := map[string]bool{}
+	toolOrder := []string{}
+	modelCalls := 0
 	outputs := []string{}
 	hasOutput := false
 	elapsed := (domain.Now() - domain.Num(run["started_at"])) * 1000
@@ -745,9 +933,11 @@ func Summary(run M, events []M) M {
 				id = domain.Str(ev["event_id"])
 			}
 			expected[id] = true
+			modelCalls++
 		case "tool.call":
 			tools++
 			toolNames[domain.Str(d["tool"])] = true
+			toolOrder = append(toolOrder, domain.Str(d["tool"]))
 			expected[domain.Str(d["call_id"])] = true
 		case "cost.record":
 			costs = append(costs, d)
@@ -810,13 +1000,8 @@ func Summary(run M, events []M) M {
 		add("Retries", retry <= domain.Int(config["max_retries"]), M{"actual": retry, "limit": config["max_retries"]})
 	}
 	text := strings.Join(outputs, "\n")
-	for _, term := range domain.Strings(config["output_contains"]) {
-		var passed any = strings.Contains(text, term)
-		if !hasOutput {
-			passed = nil
-		}
-		add("Output contains: "+term, passed, M{"expected": term})
-	}
+	checks = append(checks, OutputChecks(config, text, hasOutput && terminal)...)
+	checks = append(checks, ToolChecks(config, toolOrder, modelCalls, terminal)...)
 	for _, node := range domain.Strings(config["required_nodes"]) {
 		add("Visited: "+node, visits[node] > 0, M{"visits": visits[node]})
 	}
@@ -844,7 +1029,7 @@ func Summary(run M, events []M) M {
 	for _, n := range visits {
 		nvisits += n
 	}
-	return M{"events": len(events), "visits": nvisits, "unique_nodes": len(visits), "retries": retry, "tool_calls": tools, "duration_ms": elapsed, "phases": phases, "checks": checks, "verdict": verdict, "cost": M{"known_usd": known, "unknown_entries": unknown, "entries": len(costs), "estimated_entries": estimated, "tokens_in": tin, "tokens_out": tout, "unreported_operations": unreported}}
+	return M{"events": len(events), "visits": nvisits, "unique_nodes": len(visits), "retries": retry, "tool_calls": tools, "model_calls": modelCalls, "tools": toolOrder, "duration_ms": elapsed, "phases": phases, "checks": checks, "verdict": verdict, "cost": M{"known_usd": known, "unknown_entries": unknown, "entries": len(costs), "estimated_entries": estimated, "tokens_in": tin, "tokens_out": tout, "unreported_operations": unreported}}
 }
 func ErrorMessage(err error) M {
 	var p *ProtocolError

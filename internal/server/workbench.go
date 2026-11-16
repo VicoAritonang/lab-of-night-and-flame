@@ -154,11 +154,22 @@ func runScenario(r *Request) (any, error) {
 	if mode == "" {
 		mode = domain.Str(scenario["mode"])
 	}
+	return dispatchRun(r, scenarioID, scenario, mode, domain.Str(body["session_id"]), M{"label": domain.Str(body["label"])})
+}
+
+// dispatchRun stores a scenario run and starts it: an LLM step is queued for
+// the worker, an agent replay is pushed to a connected SDK. extra fields (label,
+// suite_id, repeat) are stored on the run.
+func dispatchRun(r *Request, scenarioID string, scenario M, mode, sessionID string, extra M) (M, error) {
+	ctx := r.R.Context()
 	if !domain.Has(workbench.Modes, mode) {
 		return nil, invalid("mode must be agent or llm")
 	}
 	id := domain.ID("wbr")
-	run := M{"scenario_id": scenarioID, "mode": mode, "request": scenario, "status": "queued", "created_at": domain.Now(), "label": domain.Str(body["label"])}
+	run := M{"scenario_id": scenarioID, "mode": mode, "request": scenario, "status": "queued", "created_at": domain.Now()}
+	for k, v := range extra {
+		run[k] = v
+	}
 	if mode == "llm" {
 		req, err := workbench.Request(scenario)
 		if err != nil {
@@ -178,13 +189,13 @@ func runScenario(r *Request) (any, error) {
 		return run, nil
 	}
 	run["status"] = "dispatched"
-	run["target"] = M{"service": scenario["service"], "session_id": body["session_id"]}
-	if err = r.DB.Create(ctx, workbench.Runs, id, run); err != nil {
+	run["target"] = M{"service": scenario["service"], "session_id": sessionID}
+	if err := r.DB.Create(ctx, workbench.Runs, id, run); err != nil {
 		return nil, err
 	}
 	pushCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	peer, err := r.S.Hub.Push(pushCtx, r.DB.Project, domain.Str(body["session_id"]), domain.Str(scenario["service"]), workbench.Command(id, scenarioID, scenario))
+	peer, err := r.S.Hub.Push(pushCtx, r.DB.Project, sessionID, domain.Str(scenario["service"]), workbench.Command(id, scenarioID, scenario))
 	if err != nil {
 		_ = r.DB.Delete(ctx, workbench.Runs, id)
 		if errors.Is(err, tracelab.ErrNoPeer) {
@@ -192,11 +203,10 @@ func runScenario(r *Request) (any, error) {
 		}
 		return nil, conflict("The agent connection closed before the replay was delivered; retry.")
 	}
-	run, err = r.DB.Update(ctx, workbench.Runs, id, func(m M) error {
+	return r.DB.Update(ctx, workbench.Runs, id, func(m M) error {
 		m["target"] = M{"service": peer.Service, "session_id": peer.Session}
 		return nil
 	})
-	return run, err
 }
 
 func listScenarioRuns(r *Request) (any, error) {

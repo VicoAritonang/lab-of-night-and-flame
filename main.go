@@ -1,5 +1,8 @@
 // Agent Reliability Lab server. Build with: go build -o arl .
 //
+// "arl suite ..." runs a Workbench regression suite against a running lab and
+// exits non-zero when its gate fails (CI); "arl healthcheck" probes the server.
+//
 // By default (no ARL_SQS_QUEUE_URL) one process serves the HTTP API, the agent
 // WebSocket, the embedded UI and runs the job worker: the all-in-one mode used
 // by docker compose next to the agent under development. With SQS configured
@@ -17,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/VicoAritonang/lab-of-night-and-flame/internal/cli"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/config"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/domain"
 	"github.com/VicoAritonang/lab-of-night-and-flame/internal/engine"
@@ -32,6 +36,9 @@ var connectionDoc string
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
+	}
+	if len(os.Args) > 1 && os.Args[1] == "suite" {
+		os.Exit(cli.Suite(os.Args[2:], os.Stdout, os.Stderr))
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -89,10 +96,11 @@ func main() {
 			}
 		}()
 	}
+	go engine.Periodic(ctx, db, app.Q)
 	if cfg.QueueURL != "" {
 		go app.Q.Dispatch(ctx)
 	}
-	_, _ = app.Q.Enqueue(ctx, "datasets.seed", domain.M{}, "seed:v1")
+	_, _ = app.Q.Enqueue(ctx, "datasets.seed", domain.M{}, "seed:v2")
 	_, _ = app.Q.Enqueue(ctx, "catalog.refresh", domain.M{}, "catalog:startup:"+time.Now().UTC().Format("2006-01-02"))
 	srv := &http.Server{Addr: cfg.Address, Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	go func() {

@@ -1,11 +1,11 @@
 # Go SDK for Agent Reliability Lab
 
 ```bash
-go get go.vicoworks.com/arl@latest
+go get go.vicoworks.com/agent-reliability-lab@latest
 ```
 
 ```go
-import "go.vicoworks.com/arl"
+import arl "go.vicoworks.com/agent-reliability-lab"
 
 lab := arl.New("support-agent", arl.Options{}) // reads LAB_WS_URL, STAGE, LAB_TOKEN
 lab.OnReplay(func(ctx context.Context, r *arl.Replay) error {
@@ -33,9 +33,22 @@ every call is a no-op. Fail-open by default; `Options.Required` or
 `LAB_REQUIRED=true` makes failures visible for strict tests.
 
 - Requires Go 1.23+. Only dependency: `github.com/coder/websocket`.
-- `go.vicoworks.com/arl` is a vanity path for
+- `go.vicoworks.com/agent-reliability-lab` is a vanity path for
   [github.com/VicoAritonang/lab-of-night-and-flame/sdk/go](https://github.com/VicoAritonang/lab-of-night-and-flame/tree/main/sdk/go).
   With the default `GOPROXY` it works on any supported Go version; with
   `GOPROXY=direct` it needs Go 1.25+.
 - A complete agent is in [examples/go-agent](../../examples/go-agent/main.go);
   the protocol is in [connection.md](../../connection.md).
+
+## Feedback, prompts and threads
+
+```go
+p, _ := lab.Prompt(ctx, "support.answer", arl.PromptOptions{Fallback: &arl.Prompt{System: "You are a support agent."}})
+run := lab.StartRun(ctx, "Support question", arl.RunOptions{ID: requestID, Data: arl.Object{"thread_id": conversationID, "user_id": userID}})
+run.Snapshot(nil, arl.Object{"model": model, "prompt": p.Ref()})
+messages := p.Render(arl.Object{"company": "Acme", "question": question})
+// ...
+one := 1.0
+lab.Feedback(ctx, arl.Feedback{RunID: requestID, Name: "thumbs", Value: &one}) // later, from your API
+```
+

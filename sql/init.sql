@@ -81,4 +81,32 @@ CREATE TABLE IF NOT EXISTS arl.audit (
  detail jsonb NOT NULL DEFAULT '{}'
 );
 INSERT INTO arl.schema_versions(version) VALUES(1) ON CONFLICT DO NOTHING;
+-- v2: production observability. Per-trace rollups are maintained at ingest so
+-- monitoring queries never re-read events; feedback holds human, end-user and
+-- automated (online evaluator) scores attached to traces.
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS duration_ms double precision;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS cost_usd double precision NOT NULL DEFAULT 0;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS tokens_in bigint NOT NULL DEFAULT 0;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS tokens_out bigint NOT NULL DEFAULT 0;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS model_calls integer NOT NULL DEFAULT 0;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS tool_calls integer NOT NULL DEFAULT 0;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS errors integer NOT NULL DEFAULT 0;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS models text[] NOT NULL DEFAULT '{}';
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}';
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS thread_id text;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS user_id text;
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'sdk';
+ALTER TABLE arl.traces ADD COLUMN IF NOT EXISTS verdict text;
+CREATE INDEX IF NOT EXISTS traces_thread ON arl.traces(project_id,thread_id) WHERE thread_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS arl.feedback (
+ id text PRIMARY KEY, project_id text NOT NULL REFERENCES arl.projects(id),
+ trace_id text NOT NULL REFERENCES arl.traces(id) ON DELETE CASCADE, name text NOT NULL,
+ value double precision, label text, comment text,
+ source text NOT NULL CHECK(source IN ('human','user','auto','sdk')), author text NOT NULL,
+ queue_id text, evaluator_id text, metadata jsonb NOT NULL DEFAULT '{}',
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS feedback_trace ON arl.feedback(project_id,trace_id);
+CREATE INDEX IF NOT EXISTS feedback_name ON arl.feedback(project_id,name,created_at DESC);
+INSERT INTO arl.schema_versions(version) VALUES(2) ON CONFLICT DO NOTHING;
 COMMIT;

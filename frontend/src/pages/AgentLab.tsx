@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { demoTrace, labWebSocketURL, LabRun, LabStatus, RunDetail, TraceEvent } from "../agentLab";
+import { FeedbackPanel } from "../components/Feedback";
 import { Badge, Card, ErrorBox, Icon, useToast } from "../components/ui";
 import { ago, num } from "../format";
 import { useApi } from "../hooks";
@@ -119,7 +120,7 @@ function RunView({ id }: { id: string }) {
   const costs = visible.filter((e) => e.event === "cost.record");
   const spans = visible.filter((e) => e.event === "span.start");
   return <div className="al-run">
-    <div className="row wrap"><div className="grow"><h2 className="al-run-title">{run.name}</h2><div className="mono muted">{run.service} / {run.external_id}</div></div><Badge tone={tone(run.status)}>{run.status}</Badge><Badge tone={tone(summary.verdict)}>{summary.verdict.replaceAll("_", " ")}</Badge><button className="btn sm" disabled={opening} onClick={() => openInWorkbench()}><Icon name="flask" />Open in Workbench</button><a className="btn sm" href={`/api/agent-lab/runs/${id}/export`} download><Icon name="download" />Export JSON</a></div>
+    <div className="row wrap"><div className="grow"><h2 className="al-run-title">{run.name}</h2><div className="mono muted">{run.service} / {run.external_id}{run.source === "otlp" ? " · OpenTelemetry" : ""}</div>{(run.thread_id || run.user_id || !!run.tags?.length) && <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>{run.thread_id && <a className="tag mono" href={`/monitor?thread=${encodeURIComponent(run.thread_id)}`} title="conversation thread">⇄ {run.thread_id}</a>}{run.user_id && <span className="tag mono">user {run.user_id}</span>}{run.tags?.map((t) => <span key={t} className="tag">{t}</span>)}</div>}</div><Badge tone={tone(run.status)}>{run.status}</Badge><Badge tone={tone(summary.verdict)}>{summary.verdict.replaceAll("_", " ")}</Badge><button className="btn sm" disabled={opening} onClick={() => openInWorkbench()}><Icon name="flask" />Open in Workbench</button><a className="btn sm" href={`/api/agent-lab/runs/${id}/export`} download><Icon name="download" />Export JSON</a></div>
     {run.config.metadata?.simulated && <div className="al-notice">SIMULATED TRACE · Protocol demonstration. Costs and timings are illustrative; no AI provider is called.</div>}
     <div className="al-stats">
       <div><span>Trace events</span><b>{num(summary.events)}</b></div><div><span>Graph visits / nodes</span><b>{summary.visits} / {summary.unique_nodes}</b></div><div><span>Retries / tool calls</span><b>{summary.retries} / {summary.tool_calls}</b></div><div><span>Duration</span><b>{(summary.duration_ms / 1000).toFixed(2)}s</b></div><div><span>Known cost (USD)</span><b>{cost.entries ? money(cost.known_usd) : "Unreported"}</b><small>{cost.unknown_entries} unknown · {cost.estimated_entries} estimated</small></div>
@@ -161,6 +162,7 @@ function RunView({ id }: { id: string }) {
       {summary.checks.map((c, i) => <details key={i} className="al-span"><summary><Badge tone={c.passed === true ? "good" : c.passed === false ? "bad" : "warn"}>{c.passed === true ? "PASS" : c.passed === false ? "FAIL" : "PENDING / UNKNOWN"}</Badge> {c.name}</summary><pre className="al-json">{pretty(c.evidence)}</pre></details>)}
       <details className="al-span"><summary>Frozen checks for this run</summary><pre className="al-json">{pretty(run.check_config)}</pre></details>
     </Card>}
+    {tab === "checks" && <FeedbackPanel traceId={id} />}
   </div>;
 }
 

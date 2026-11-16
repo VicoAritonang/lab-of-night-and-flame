@@ -49,5 +49,8 @@ production code.
 | `run.emit(event, phase, data)` | Any custom `arl/1` event. |
 | `@lab.on_replay` | Replay handler; runs started inside it are linked to the replay automatically. |
 | `lab.upload_image(name, bytes)` | Store an image and reference it as `{"type": "image", "artifact": digest}`. |
+| `lab.run(name, thread_id=..., user_id=..., tags=[...])` | Group conversation turns, end users and labels; all filterable in *Monitor*. |
+| `lab.feedback(name, value, run_id=... \| trace_id=...)` | End-user or reviewer feedback (number or bool, optional `label`/`comment`). `run.feedback(...)` for the current run. |
+| `lab.prompt(name, label=None, version=None, fallback=...)` | Fetch a prompt version from the registry (the `production` label by default, cached 60 s). `prompt.render(**vars)` returns chat messages; `prompt.ref` identifies the version. The fallback keeps production code working without the lab. |
 
 The protocol is documented in [connection.md](../../connection.md).

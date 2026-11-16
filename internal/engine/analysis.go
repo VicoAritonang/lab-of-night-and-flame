@@ -267,7 +267,21 @@ func (e *Engine) Analyze(ctx context.Context, cid string) (M, error) {
 			mcnemar = stats.McNemar(wins, losses)
 			method = "paired sample bootstrap + exact McNemar on discordant binary outcomes"
 		}
-		comparisons = append(comparisons, M{"baseline": baseline, "candidate": key, "paired_samples": len(a), "missing_pairs": len(samples) - len(a), "wins": wins, "losses": losses, "ties": ties, "diff": stats.Paired(a, b, seed), "mcnemar_p": mcnemar, "test": method})
+		var effect any
+		if len(a) > 0 {
+			effect = stats.CohenH(domain.Num(stats.Mean(a)), domain.Num(stats.Mean(b)))
+		}
+		comparisons = append(comparisons, M{"baseline": baseline, "candidate": key, "paired_samples": len(a), "missing_pairs": len(samples) - len(a), "wins": wins, "losses": losses, "ties": ties, "diff": stats.Paired(a, b, seed), "mcnemar_p": mcnemar, "test": method, "effect_size_h": effect})
+	}
+	// Several candidates against one baseline form a family of tests: report
+	// family-wise (Holm) and false-discovery-rate (Benjamini–Hochberg) adjusted p-values.
+	raw := []any{}
+	for _, cmp := range comparisons {
+		raw = append(raw, cmp["mcnemar_p"])
+	}
+	holm, bh := stats.AdjustHolm(raw), stats.AdjustBH(raw)
+	for i, cmp := range comparisons {
+		cmp["mcnemar_p_holm"], cmp["mcnemar_p_bh"] = holm[i], bh[i]
 	}
 	gateArms := M{}
 	executionComplete := c["status"] == "completed"
@@ -431,7 +445,7 @@ func (e *Engine) Analyze(ctx context.Context, cid string) (M, error) {
 			latPts = append(latPts, M{"id": key, "x": lat, "y": quality})
 		}
 	}
-	result := M{"campaign_id": cid, "status": c["status"], "primary_scorer": primary, "scorers": scorerSpecs, "scoring_revision": revision, "dataset": M{"id": ds["id"], "name": ds["name"], "version": ds["version"], "digest": ds["digest"], "modality": ds["modality"]}, "labels": c["labels"], "arms": arms, "baseline": baseline, "summaries": summaries, "comparisons": comparisons, "matrix": M{"samples": matrixSamples, "arms": armKeys, "values": matrix}, "slices": slices, "pareto": M{"cost": stats.Pareto(costPts), "latency": stats.Pareto(latPts)}, "gate": M{"arms": gateArms, "execution_status": c["status"], "execution_complete": executionComplete, "note": nil, "policy": acc}, "suspect_labels": suspectLabels(trials, sampleByID), "ranking": ranking, "best": best, "statistically_tied_with_best": tied, "methods": M{"pass_rate": "95% Wilson interval", "task_balanced": "sample-level bootstrap, 2000 resamples", "comparison": "paired sample bootstrap; exact McNemar for discordant outcomes", "pass_k": "unbiased estimator; complete repetitions only"}, "snapshot_done": c["done"], "snapshot_status": c["status"]}
+	result := M{"campaign_id": cid, "status": c["status"], "primary_scorer": primary, "scorers": scorerSpecs, "scoring_revision": revision, "dataset": M{"id": ds["id"], "name": ds["name"], "version": ds["version"], "digest": ds["digest"], "modality": ds["modality"]}, "labels": c["labels"], "arms": arms, "baseline": baseline, "summaries": summaries, "comparisons": comparisons, "matrix": M{"samples": matrixSamples, "arms": armKeys, "values": matrix}, "slices": slices, "pareto": M{"cost": stats.Pareto(costPts), "latency": stats.Pareto(latPts)}, "gate": M{"arms": gateArms, "execution_status": c["status"], "execution_complete": executionComplete, "note": nil, "policy": acc}, "suspect_labels": suspectLabels(trials, sampleByID), "ranking": ranking, "best": best, "statistically_tied_with_best": tied, "methods": M{"pass_rate": "95% Wilson interval", "task_balanced": "sample-level bootstrap, 2000 resamples", "comparison": "paired sample bootstrap; exact McNemar for discordant outcomes", "pass_k": "unbiased estimator; complete repetitions only", "multiplicity": "Holm-Bonferroni (family-wise) and Benjamini-Hochberg (false discovery rate) adjusted McNemar p-values", "effect_size": "Cohen's h between mean pass rates"}, "snapshot_done": c["done"], "snapshot_status": c["status"]}
 	if err = e.DB.Put(ctx, "results", cid, result); err != nil {
 		return nil, err
 	}

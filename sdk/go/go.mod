@@ -1,4 +1,4 @@
-module go.vicoworks.com/arl
+module go.vicoworks.com/agent-reliability-lab
 
 go 1.23
 

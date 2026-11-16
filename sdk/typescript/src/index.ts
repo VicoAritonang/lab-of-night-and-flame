@@ -32,6 +32,8 @@ export interface LabOptions {
   timeoutMs?: number;
   /** Custom WebSocket constructor, e.g. from the "ws" package on Node < 22. */
   WebSocket?: any;
+  /** Custom fetch for the REST calls (feedback, prompts); defaults to globalThis.fetch. */
+  fetch?: typeof fetch;
   logger?: Pick<Console, "warn">;
 }
 
@@ -83,7 +85,7 @@ export class Lab {
       ...options,
       url: options.url ?? env("LAB_WS_URL"), stage: options.stage ?? env("STAGE"), token: options.token ?? env("LAB_TOKEN"),
       project: options.project ?? env("LAB_PROJECT_ID"), profile: options.profile ?? "agent",
-      capabilities: options.capabilities ?? [], metadata: options.metadata ?? {},
+      capabilities: options.capabilities ?? [], metadata: { environment: environment(), ...(options.metadata ?? {}) },
       required: options.required ?? env("LAB_REQUIRED") === "true", timeoutMs: options.timeoutMs ?? 5000,
     };
     this.phases = options.phases?.length ? options.phases : DEFAULT_PHASES;
@@ -234,9 +236,12 @@ export class Lab {
   }
 
   /** Starts a run; pass the replay when running inside a replay handler. */
-  async startRun(name: string, opts: { runId?: string; checks?: Obj; data?: Obj; replay?: Replay | null } = {}): Promise<Run> {
+  async startRun(name: string, opts: { runId?: string; checks?: Obj; data?: Obj; replay?: Replay | null; threadId?: string; userId?: string; tags?: string[] } = {}): Promise<Run> {
     const run = new Run(this, opts.runId ?? newId());
     const data: Obj = { name, ...(opts.data ?? {}) };
+    if (opts.threadId) data.thread_id = opts.threadId;
+    if (opts.userId) data.user_id = opts.userId;
+    if (opts.tags?.length) data.tags = opts.tags;
     const checks: Obj = { ...(opts.checks ?? {}) };
     if (opts.replay) {
       data.replay = { replay_id: opts.replay.replay_id, scenario_id: opts.replay.scenario_id, source_trace_id: opts.replay.source_trace_id };
@@ -270,6 +275,57 @@ export class Lab {
     try { await this.handler(r, this); }
     catch (e) { return this.status(r.replay_id, "failed", e instanceof Error ? `${e.name}: ${e.message}` : String(e)); }
     await this.status(r.replay_id, "completed");
+  }
+
+  private async http(method: string, path: string, body?: Obj): Promise<any> {
+    const doFetch = this.o.fetch ?? globalThis.fetch;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.o.token) headers.Authorization = `Bearer ${this.o.token}`;
+    if (this.o.project) headers["X-Lab-Project"] = this.o.project;
+    const res = await doFetch(this.httpBase() + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(this.o.timeoutMs * 2) });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(`lab HTTP ${res.status}: ${typeof data?.detail === "string" ? data.detail : "request failed"}`);
+    return data;
+  }
+
+  /** Attaches feedback (e.g. an end user's thumbs-up) to a run identified by traceId or by your own runId. */
+  async feedback(name: string, value?: number | boolean | null, opts: { traceId?: string; runId?: string; label?: string; comment?: string; source?: "user" | "human" | "sdk"; author?: string; metadata?: Obj } = {}): Promise<Obj | null> {
+    if (!this.enabled) return null;
+    const body: Obj = { name, value: value ?? null, label: opts.label, comment: opts.comment, source: opts.source ?? "user", metadata: opts.metadata ?? {} };
+    if (opts.author) body.author = opts.author;
+    if (opts.traceId) body.trace_id = opts.traceId; else { body.run_id = opts.runId; body.service = this.service; }
+    try { return await this.http("POST", "/api/feedback", body); }
+    catch (e) {
+      if (this.o.required) throw e;
+      (this.o.logger ?? console).warn(`[arl] feedback not recorded: ${(e as Error).message}`);
+      return null;
+    }
+  }
+
+  private prompts = new Map<string, { at: number; prompt: Prompt }>();
+
+  /**
+   * Fetches a prompt version from the lab registry: the "production" label by default, or a label/version.
+   * `fallback` (system prompt string or {system, messages}) is used when the lab is disabled or unreachable.
+   */
+  async prompt(name: string, opts: { label?: string; version?: number; fallback?: string | { system?: string; messages?: Obj[]; config?: Obj }; cacheMs?: number } = {}): Promise<Prompt> {
+    const key = JSON.stringify([name, opts.label ?? "", opts.version ?? 0]);
+    const hit = this.prompts.get(key);
+    if (hit && Date.now() - hit.at < (opts.cacheMs ?? 60000)) return hit.prompt;
+    if (this.enabled) {
+      const query = opts.version ? `?version=${opts.version}` : opts.label ? `?label=${encodeURIComponent(opts.label)}` : "";
+      try {
+        const prompt = Prompt.fromVersion(await this.http("GET", `/api/prompts/${encodeURIComponent(name)}${query}`));
+        this.prompts.set(key, { at: Date.now(), prompt });
+        return prompt;
+      } catch (e) {
+        if (this.o.required && opts.fallback === undefined) throw e;
+        (this.o.logger ?? console).warn(`[arl] prompt ${name} unavailable, using fallback: ${(e as Error).message}`);
+      }
+    }
+    if (opts.fallback === undefined) throw new Error(`prompt ${name} is unavailable and no fallback was given`);
+    const t = typeof opts.fallback === "string" ? { system: opts.fallback } : opts.fallback;
+    return new Prompt(name, null, t.system ?? "", t.messages ?? [], t.config ?? {});
   }
 
   /** Derives the Lab's HTTP origin from the WebSocket URL. */
@@ -328,6 +384,10 @@ export class Run {
     await this.emit("tool.result", this.phase("agent"), { call_id: call, status: error ? "error" : "ok", result, ...(error ? { error: String(error) } : {}) }, { spanId: call });
   }
   output(content: unknown) { return this.emit("output", this.phase("output"), { content: parts(content) }); }
+  /** Attaches feedback (e.g. an automated self-check) to this run. */
+  feedback(name: string, value?: number | boolean | null, opts: Parameters<Lab["feedback"]>[2] = {}) {
+    return this.lab.feedback(name, value, { source: "sdk", ...opts, ...(this.traceId ? { traceId: this.traceId } : { runId: this.id }) });
+  }
   async end(status: "completed" | "failed" | "cancelled" = "completed"): Promise<void> {
     if (this.ended) return;
     this.ended = true;
@@ -337,6 +397,45 @@ export class Run {
   async finish(error?: unknown): Promise<void> {
     if (error) { await this.emit("error", this.phase("output"), { reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error) }); return this.end("failed"); }
     return this.end("completed");
+  }
+}
+
+const VARIABLE = /\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}/g;
+
+/** Runtime facts for comparing runs across machines (no host names). */
+function environment(): Obj {
+  const g = globalThis as any;
+  const p = g.process;
+  if (p?.versions?.node) return { runtime: `node ${p.versions.node}`, os: p.platform, arch: p.arch };
+  if (g.Deno) return { runtime: `deno ${g.Deno.version?.deno}`, os: g.Deno.build?.os, arch: g.Deno.build?.arch };
+  if (g.Bun) return { runtime: `bun ${g.Bun.version}` };
+  return { runtime: "js" };
+}
+
+/** A prompt version from the lab registry (or a local fallback). */
+export class Prompt {
+  constructor(readonly name: string, readonly version: number | null, readonly system: string, readonly messages: Obj[], readonly config: Obj) {}
+  static fromVersion(v: Obj): Prompt {
+    const t = v.template ?? {};
+    return new Prompt(v.prompt ?? "", v.version ?? null, t.system ?? "", t.messages ?? [], v.config ?? {});
+  }
+  /** Record this in run.snapshot(state, { prompt: p.ref }) to know which version ran. */
+  get ref(): Obj { return { name: this.name, version: this.version }; }
+  private static fill(text: string, vars: Obj): string {
+    return text.replace(VARIABLE, (token, path: string) => {
+      let v: any = vars;
+      for (const part of path.split(".")) {
+        if (v === null || typeof v !== "object" || !(part in v)) return token;
+        v = v[part];
+      }
+      return typeof v === "string" ? v : JSON.stringify(v);
+    });
+  }
+  renderSystem(vars: Obj = {}): string { return Prompt.fill(this.system, vars); }
+  /** Chat messages with {{variables}} filled in. */
+  render(vars: Obj = {}): Obj[] {
+    const out: Obj[] = this.system ? [{ role: "system", content: Prompt.fill(this.system, vars) }] : [];
+    return out.concat(this.messages.map((m) => ({ role: m.role, content: Prompt.fill(String(m.content ?? ""), vars) })));
   }
 }
 
