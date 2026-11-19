@@ -1,0 +1,10 @@
+# Protocol Buffers contract of the lab (api/proto). See api/README.md.
+version: v2
+modules:
+  - path: api/proto
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - WIRE_JSON

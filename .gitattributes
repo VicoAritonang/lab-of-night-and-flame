@@ -1,1 +1,5 @@
 *.sh text eol=lf
+# API contracts are compared byte for byte in tests; keep them LF everywhere.
+api/** text eol=lf
+api/gen/** linguist-generated=true
+api/openapi.json linguist-generated=true

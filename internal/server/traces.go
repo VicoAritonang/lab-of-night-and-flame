@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/coder/websocket"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/store"
 	"go.vicoworks.com/agent-reliability-lab/internal/tracelab"
 	"go.vicoworks.com/agent-reliability-lab/internal/workbench"
 	"log/slog"
@@ -98,113 +99,135 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 	conn.SetReadLimit(2 * tracelab.MaxMessage)
-	db := s.DB.Scope(project)
-	sid := ""
-	done := make(chan struct{})
-	defer close(done)
-	defer func() {
-		if sid != "" {
-			s.Hub.Detach(sid)
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-			_, _ = s.DB.Pool.Exec(ctx, "UPDATE arl.sessions SET connected_owner=NULL,connected_until=NULL,last_seen=now() WHERE id=$1 AND connected_owner=$2", sid, s.Hub.Owner)
-		}
-	}()
-	peer := &tracelab.Peer{Conn: conn}
-	write := func(msg M) error {
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		return peer.Write(ctx, msg)
-	}
+	a := s.newAgentConn(r.Context(), project, func(ctx context.Context, msg M) error {
+		return conn.Write(ctx, websocket.MessageText, domain.JSON(msg))
+	}, func(reason string) { _ = conn.Close(websocket.StatusServiceRestart, reason) })
+	defer a.close()
 	for {
-		timeout := 90 * time.Second
-		if sid == "" {
-			timeout = 30 * time.Second
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		ctx, cancel := context.WithTimeout(r.Context(), a.idle())
 		kind, body, readErr := conn.Read(ctx)
 		cancel()
 		if readErr != nil {
 			return
 		}
 		if kind != websocket.MessageText {
-			_ = write(M{"type": "error", "code": "invalid_message", "message": "Send JSON text frames; upload images over HTTP"})
+			_ = a.write(M{"type": "error", "code": "invalid_message", "message": "Send JSON text frames; upload images over HTTP"})
 			continue
 		}
-		msg, err := tracelab.AssertJSON(body)
-		if err != nil {
-			_ = write(tracelab.ErrorMessage(err))
-			if sid == "" {
-				_ = conn.Close(websocket.StatusPolicyViolation, "invalid handshake")
-				return
-			}
-			continue
+		reply, fatal := a.handle(body)
+		if a.write(reply) != nil {
+			return
 		}
-		var reply M
-		if sid == "" {
-			if p := domain.Str(msg["project_id"]); p != "" {
-				db = s.DB.Scope(p)
-			}
-			reply, err = tracelab.Hello(r.Context(), db, s.Hub, msg)
-			if err == nil {
-				sid = domain.Str(reply["session_id"])
-				peer.Session, peer.Project, peer.Service, peer.Capabilities = sid, db.Project, domain.Str(msg["service"]), domain.Strings(msg["capabilities"])
-				s.Hub.Attach(peer)
-				sessionID := sid
-				go func() {
-					ticker := time.NewTicker(20 * time.Second)
-					defer ticker.Stop()
-					for {
-						select {
-						case <-done:
-							return
-						case <-r.Context().Done():
-							return
-						case <-ticker.C:
-							ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-							_, _ = db.Pool.Exec(ctx, "UPDATE arl.sessions SET connected_until=now()+interval '50 seconds' WHERE id=$1 AND connected_owner=$2", sessionID, s.Hub.Owner)
-							cancel()
-						}
-					}
-				}()
-			}
-		} else if msg["type"] == "ping" {
-			reply = M{"type": "pong", "timestamp": domain.Now(), "listening": s.Hub.Listening(db.Project)}
-		} else if msg["type"] == "replay.status" {
-			if err = workbench.Status(r.Context(), db, msg); err != nil {
-				err = tracelab.Errorf("invalid_replay", "Unknown replay or status")
-			} else {
-				reply = M{"type": "ack", "replay_id": msg["replay_id"]}
-			}
-		} else if !s.Hub.Listening(db.Project) {
-			err = tracelab.Errorf("not_listening", "Listener stopped")
-		} else {
-			reply, err = tracelab.Ingest(r.Context(), db, sid, msg)
-			if err == nil {
-				if e := workbench.Link(r.Context(), db, msg, reply); e != nil {
-					slog.Warn("cannot link trace to replay", "trace_id", reply["trace_id"])
-				}
-			}
-			if err == nil && msg["event"] == "run.end" {
-				_, _ = s.Q.Scope(db.Project).Enqueue(r.Context(), "trace.summarize", M{"trace_id": reply["trace_id"]}, fmt.Sprintf("trace:final:%v:%v", reply["trace_id"], reply["ordinal"]))
-			}
-		}
-		if err != nil {
-			reply = tracelab.ErrorMessage(err)
-			reply["event_id"] = msg["event_id"]
-			if write(reply) != nil {
-				return
-			}
-			if sid == "" {
-				_ = conn.Close(websocket.StatusPolicyViolation, domain.Str(reply["code"]))
-				return
-			}
-			continue
-		}
-		if write(reply) != nil {
+		if fatal {
+			_ = conn.Close(websocket.StatusPolicyViolation, domain.Str(reply["code"]))
 			return
 		}
 	}
+}
+
+// agentConn is one arl/1 connection. The WebSocket endpoint and the gRPC
+// TelemetryService stream share it, so both transports validate, persist and
+// answer frames identically.
+type agentConn struct {
+	s    *Server
+	ctx  context.Context
+	db   *store.Store
+	peer *tracelab.Peer
+	sid  string
+	done chan struct{}
+}
+
+func (s *Server) newAgentConn(ctx context.Context, project string, send func(context.Context, M) error, closeConn func(string)) *agentConn {
+	return &agentConn{s: s, ctx: ctx, db: s.DB.Scope(project), peer: &tracelab.Peer{Send: send, Close: closeConn}, done: make(chan struct{})}
+}
+
+// idle is how long the agent may stay silent: short until the hello.
+func (a *agentConn) idle() time.Duration {
+	if a.sid == "" {
+		return 30 * time.Second
+	}
+	return 90 * time.Second
+}
+func (a *agentConn) write(msg M) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	return a.peer.Write(ctx, msg)
+}
+
+// handle answers one JSON frame. fatal means the connection must close after
+// the reply (a rejected handshake).
+func (a *agentConn) handle(body []byte) (reply M, fatal bool) {
+	s, ctx := a.s, a.ctx
+	msg, err := tracelab.AssertJSON(body)
+	if err != nil {
+		return tracelab.ErrorMessage(err), a.sid == ""
+	}
+	if a.sid == "" {
+		if p := domain.Str(msg["project_id"]); p != "" {
+			a.db = s.DB.Scope(p)
+		}
+		reply, err = tracelab.Hello(ctx, a.db, s.Hub, msg)
+		if err == nil {
+			a.sid = domain.Str(reply["session_id"])
+			a.peer.Session, a.peer.Project, a.peer.Service, a.peer.Capabilities = a.sid, a.db.Project, domain.Str(msg["service"]), domain.Strings(msg["capabilities"])
+			s.Hub.Attach(a.peer)
+			go a.heartbeat()
+		}
+	} else if msg["type"] == "ping" {
+		reply = M{"type": "pong", "timestamp": domain.Now(), "listening": s.Hub.Listening(a.db.Project)}
+	} else if msg["type"] == "replay.status" {
+		if err = workbench.Status(ctx, a.db, msg); err != nil {
+			err = tracelab.Errorf("invalid_replay", "Unknown replay or status")
+		} else {
+			reply = M{"type": "ack", "replay_id": msg["replay_id"]}
+		}
+	} else if !s.Hub.Listening(a.db.Project) {
+		err = tracelab.Errorf("not_listening", "Listener stopped")
+	} else {
+		reply, err = tracelab.Ingest(ctx, a.db, a.sid, msg)
+		if err == nil {
+			if e := workbench.Link(ctx, a.db, msg, reply); e != nil {
+				slog.Warn("cannot link trace to replay", "trace_id", reply["trace_id"])
+			}
+		}
+		if err == nil && msg["event"] == "run.end" {
+			_, _ = s.Q.Scope(a.db.Project).Enqueue(ctx, "trace.summarize", M{"trace_id": reply["trace_id"]}, fmt.Sprintf("trace:final:%v:%v", reply["trace_id"], reply["ordinal"]))
+		}
+	}
+	if err != nil {
+		reply = tracelab.ErrorMessage(err)
+		reply["event_id"] = msg["event_id"]
+		return reply, a.sid == ""
+	}
+	return reply, false
+}
+
+// heartbeat keeps the session marked as connected while the connection lives.
+func (a *agentConn) heartbeat() {
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.done:
+			return
+		case <-a.ctx.Done():
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(a.ctx, 4*time.Second)
+			_, _ = a.db.Pool.Exec(ctx, "UPDATE arl.sessions SET connected_until=now()+interval '50 seconds' WHERE id=$1 AND connected_owner=$2", a.sid, a.s.Hub.Owner)
+			cancel()
+		}
+	}
+}
+func (a *agentConn) close() {
+	close(a.done)
+	if a.sid == "" {
+		return
+	}
+	a.s.Hub.Detach(a.sid)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, _ = a.s.DB.Pool.Exec(ctx, "UPDATE arl.sessions SET connected_owner=NULL,connected_until=NULL,last_seen=now() WHERE id=$1 AND connected_owner=$2", a.sid, a.s.Hub.Owner)
 }
 func traceSessions(r *Request) (any, error) {
 	rows, err := r.DB.Pool.Query(r.R.Context(), "SELECT id,service,config,extract(epoch from created_at)::double precision,extract(epoch from last_seen)::double precision,COALESCE(connected_until>now(),false) FROM arl.sessions WHERE project_id=$1 ORDER BY last_seen DESC LIMIT 200", r.DB.Project)

@@ -9,12 +9,20 @@ Thanks for helping make AI agents easier to test. Issues and pull requests are w
 - Protocol changes must stay backward compatible within `arl/1`: add optional
   fields and events; never change the meaning of existing ones. Document them in
   [connection.md](connection.md) and update all three SDKs.
+- API changes start in the contracts under [`api/`](api/README.md)
+  (`openapi.yaml`, `proto/arl/v1`, `asyncapi.yaml`), then the server. Stable
+  operations only change additively within v1; regenerate with
+  `go generate ./api` and `go generate .` (buf), and re-record
+  `api/testdata/stable-v1.json` with `go test ./api -run TestStableContract -update`
+  when you add to the stable surface. The tests reject routes missing from the
+  spec, responses that do not match it, and breaking changes.
 
 ## Local setup
 
 | Part | Requirements | Commands |
 | --- | --- | --- |
 | Server | Go 1.26, PostgreSQL ≥ 14 | `go vet ./... && go test ./...` |
+| API contracts | [buf](https://buf.build/docs/installation) (only to regenerate gRPC code) | `buf lint && go generate ./... && go test ./api` |
 | Integration tests | an **isolated** database initialised with `sql/init.sql` | `ARL_TEST_DB_URL=postgres://…/arl_test go test -p 1 ./...` |
 | UI | Node 22 | `cd frontend && npm ci && npm run dev` (proxies `/api` to `:8000`) |
 | Go SDK | Go 1.23+ | `cd sdk/go && go test ./...` |

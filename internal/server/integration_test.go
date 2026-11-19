@@ -53,7 +53,8 @@ func setup(t *testing.T) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); _ = q.RunLocal(ctx, eng.Handle) }()
-	httpServer := httptest.NewServer(s.Handler())
+	// Every REST answer the tests provoke must match api/openapi.yaml.
+	httpServer := httptest.NewServer(conforming(t, s.Handler()))
 	t.Cleanup(func() { s.Hub.Close(); httpServer.Close(); cancel(); <-done })
 	return &fixture{t, db, httpServer, eng, s}
 }
@@ -343,6 +344,7 @@ func TestAgentWebSocketTraceResumeAndExport(t *testing.T) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		checkFrame(t, m)
 		if err := c.Write(ctx, websocket.MessageText, domain.JSON(m)); err != nil {
 			t.Fatal(err)
 		}
@@ -352,6 +354,7 @@ func TestAgentWebSocketTraceResumeAndExport(t *testing.T) {
 		}
 		var out M
 		_ = json.Unmarshal(b, &out)
+		checkFrame(t, out)
 		return out
 	}
 	ws := dial()

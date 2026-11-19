@@ -1,0 +1,146 @@
+asyncapi: 3.0.0
+info:
+  title: Agent Reliability Lab agent protocol (arl/1)
+  version: 1.0.0
+  description: |
+    How an agent under development streams evidence to the lab over a
+    WebSocket: one `hello` frame, then events, each answered in order. The
+    same frames travel over the gRPC stream `arl.v1.TelemetryService/Connect`
+    (api/proto/arl/v1/telemetry.proto). This document describes the lab:
+    "receive" is a frame the agent sends, "send" a frame the lab pushes.
+
+    Every frame is one UTF-8 JSON text message of at most 1 MiB. Schemas are
+    shared with the REST contract (openapi.yaml), so a stored run event read
+    over REST has the same shape as the event the agent sent.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  externalDocs:
+    description: Integration guide with every event type
+    url: https://github.com/VicoAritonang/lab-of-night-and-flame/blob/main/connection.md
+defaultContentType: application/json
+
+servers:
+  local:
+    host: localhost:8000
+    protocol: ws
+    description: Lab started with docker compose. Use wss behind TLS.
+    security:
+      - $ref: "#/components/securitySchemes/bearer"
+      - $ref: "#/components/securitySchemes/ticket"
+
+channels:
+  agentLab:
+    address: /api/v1/agent-lab/ws
+    description: One agent session per connection; many runs may be interleaved by run_id.
+    messages:
+      hello: {$ref: "#/components/messages/hello"}
+      event: {$ref: "#/components/messages/event"}
+      ping: {$ref: "#/components/messages/ping"}
+      replayStatus: {$ref: "#/components/messages/replayStatus"}
+      helloAck: {$ref: "#/components/messages/helloAck"}
+      ack: {$ref: "#/components/messages/ack"}
+      pong: {$ref: "#/components/messages/pong"}
+      error: {$ref: "#/components/messages/error"}
+      replay: {$ref: "#/components/messages/replay"}
+    bindings:
+      ws:
+        method: GET
+        headers:
+          type: object
+          properties:
+            Authorization: {type: string, description: "Bearer <ARL_AUTH_TOKEN>, when the lab has one."}
+            X-Lab-Project: {type: string, description: Project for the session; hello.project_id overrides it.}
+        query:
+          type: object
+          properties:
+            ticket: {type: string, description: Single-use browser ticket from POST /api/v1/agent-lab/ticket.}
+
+operations:
+  openSession:
+    action: receive
+    channel: {$ref: "#/channels/agentLab"}
+    summary: First frame of every connection. A rejected hello closes the connection.
+    messages:
+      - $ref: "#/channels/agentLab/messages/hello"
+    reply:
+      channel: {$ref: "#/channels/agentLab"}
+      messages:
+        - $ref: "#/channels/agentLab/messages/helloAck"
+        - $ref: "#/channels/agentLab/messages/error"
+  recordEvent:
+    action: receive
+    channel: {$ref: "#/channels/agentLab"}
+    summary: Persist one event. The ack is sent after the event is committed.
+    messages:
+      - $ref: "#/channels/agentLab/messages/event"
+    reply:
+      channel: {$ref: "#/channels/agentLab"}
+      messages:
+        - $ref: "#/channels/agentLab/messages/ack"
+        - $ref: "#/channels/agentLab/messages/error"
+  keepAlive:
+    action: receive
+    channel: {$ref: "#/channels/agentLab"}
+    summary: Heartbeat; send one at least every heartbeat_seconds while idle.
+    messages:
+      - $ref: "#/channels/agentLab/messages/ping"
+    reply:
+      channel: {$ref: "#/channels/agentLab"}
+      messages:
+        - $ref: "#/channels/agentLab/messages/pong"
+  reportReplay:
+    action: receive
+    channel: {$ref: "#/channels/agentLab"}
+    summary: Progress of a replay the lab requested.
+    messages:
+      - $ref: "#/channels/agentLab/messages/replayStatus"
+    reply:
+      channel: {$ref: "#/channels/agentLab"}
+      messages:
+        - $ref: "#/channels/agentLab/messages/ack"
+        - $ref: "#/channels/agentLab/messages/error"
+  requestReplay:
+    action: send
+    channel: {$ref: "#/channels/agentLab"}
+    summary: Ask a session that announced the "replay" capability to re-run a saved scenario.
+    messages:
+      - $ref: "#/channels/agentLab/messages/replay"
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+    ticket:
+      type: httpApiKey
+      name: ticket
+      in: query
+  messages:
+    hello:
+      name: hello
+      payload: {$ref: "openapi.yaml#/components/schemas/AgentHello"}
+    event:
+      name: event
+      payload: {$ref: "openapi.yaml#/components/schemas/AgentEvent"}
+    ping:
+      name: ping
+      payload: {$ref: "openapi.yaml#/components/schemas/AgentPing"}
+    replayStatus:
+      name: replay.status
+      payload: {$ref: "openapi.yaml#/components/schemas/AgentReplayStatus"}
+    helloAck:
+      name: hello_ack
+      payload: {$ref: "openapi.yaml#/components/schemas/LabHelloAck"}
+    ack:
+      name: ack
+      payload: {$ref: "openapi.yaml#/components/schemas/LabAck"}
+    pong:
+      name: pong
+      payload: {$ref: "openapi.yaml#/components/schemas/LabPong"}
+    error:
+      name: error
+      payload: {$ref: "openapi.yaml#/components/schemas/LabError"}
+    replay:
+      name: replay
+      payload: {$ref: "openapi.yaml#/components/schemas/LabReplay"}

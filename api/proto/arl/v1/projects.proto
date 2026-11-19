@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package arl.v1;
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// ProjectService manages projects: data partitions of one lab owner. Every
+// other call selects its project with the "x-lab-project" header (default
+// "default"). Mirrors /api/v1/projects.
+service ProjectService {
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateProject fails with ALREADY_EXISTS when the ID is taken.
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+}
+
+message Project {
+  // Lowercase slug, ^[a-z][a-z0-9_-]{0,63}$.
+  string id = 1;
+  string name = 2;
+  // Unix time in seconds.
+  double created_at = 3;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message CreateProjectRequest {
+  string id = 1;
+  string name = 2;
+}
+
+message CreateProjectResponse {
+  Project project = 1;
+}

@@ -7,7 +7,8 @@
 // jobs, providers/catalog, artifacts, the UI shell) is always on.
 //
 // Heavy dependencies are removed at build time instead, with Go build tags:
-// arl_nootel (OTLP/protobuf), arl_nosqs (AWS SDK) and arl_noui (embedded UI).
+// arl_nootel (OTLP/protobuf), arl_nosqs (AWS SDK), arl_noui (embedded UI) and
+// arl_nogrpc (the gRPC/Connect API; REST and WebSocket remain).
 package features
 
 import (

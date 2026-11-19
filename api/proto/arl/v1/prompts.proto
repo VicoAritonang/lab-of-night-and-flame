@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// PromptService lets agents in any language fetch versioned prompts from the
+// registry at runtime, by label ("production") or version number. Mirrors
+// /api/v1/prompts/{name}. Requires the "prompts" module.
+service PromptService {
+  // GetPrompt resolves one version: by label, by version, or the latest.
+  rpc GetPrompt(GetPromptRequest) returns (GetPromptResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // RenderPrompt fills the template variables ({{name}} placeholders).
+  rpc RenderPrompt(RenderPromptRequest) returns (RenderPromptResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message PromptMessage {
+  // "system", "user" or "assistant".
+  string role = 1;
+  string content = 2;
+}
+
+message PromptTemplate {
+  string system = 1;
+  repeated PromptMessage messages = 2;
+}
+
+// PromptVersion is one immutable version of a prompt.
+message PromptVersion {
+  // "<name>@<version>".
+  string id = 1;
+  string prompt = 2;
+  int32 version = 3;
+  PromptTemplate template = 4;
+  // Model parameters stored with the version (model, temperature, ...).
+  google.protobuf.Struct config = 5;
+  repeated string variables = 6;
+  string message = 7;
+  string author = 8;
+  string digest = 9;
+  double created_at = 10;
+  // Label to version number for the whole prompt, e.g. {"production": 3}.
+  map<string, int32> labels = 11;
+  string description = 12;
+  int32 latest = 13;
+}
+
+message GetPromptRequest {
+  string name = 1;
+  // Resolve this label; empty means the latest version unless version is set.
+  string label = 2;
+  int32 version = 3;
+}
+
+message GetPromptResponse {
+  PromptVersion prompt = 1;
+}
+
+message RenderPromptRequest {
+  string name = 1;
+  string label = 2;
+  int32 version = 3;
+  google.protobuf.Struct variables = 4;
+}
+
+message RenderPromptResponse {
+  string name = 1;
+  int32 version = 2;
+  string system = 3;
+  // The system prompt (when set) followed by the rendered messages.
+  repeated PromptMessage messages = 4;
+  google.protobuf.Struct config = 5;
+  // Variables the template uses but the request did not supply.
+  repeated string missing = 6;
+}

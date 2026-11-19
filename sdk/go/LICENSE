@@ -175,18 +175,29 @@
 
    END OF TERMS AND CONDITIONS
 
-   APPENDIX: How to apply the Apache License to your work.
+   COPYRIGHT AND SCOPE OF THIS LICENSE
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+   Copyright 2026 Vico Winner Sebastian Aritonang
 
-   Copyright [yyyy] [name of copyright owner]
+   Agent Reliability Lab (also published as "Lab of Night and Flame") is
+   an open-source laboratory for building AI agents with evidence instead
+   of impressions: it records what an agent actually did over the arl/1
+   protocol, OpenTelemetry and the lab API, replays a saved agent state
+   against a different model or prompt, scores the outcome against
+   datasets and human feedback, and reports the result with statistics a
+   reviewer can check.
+
+   The terms above apply to everything in this repository, including the
+   lab server, the Workbench and web interface, the SQL schema, the API
+   contracts under api/ (OpenAPI document, Protocol Buffers definitions
+   and JSON Schemas), the examples, and the Go, Python and TypeScript
+   SDKs. Anyone may build agents, tools, clients and services on top of
+   these contracts, in any programming language and for any purpose,
+   commercial or not, under the conditions of this License.
+
+   Agents measured or replayed with the lab, prompts, datasets, traces and
+   reports that users produce with it remain the property of whoever
+   produced them; this License does not claim them.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.

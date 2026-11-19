@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// LabService describes the running lab: health, version and the optional
+// modules (ARL_FEATURES) this deployment serves. Mirrors GET /api/v1/health
+// and GET /api/v1/features.
+service LabService {
+  // GetHealth checks the database and reports version and enabled modules.
+  // Callable without authentication.
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GetFeatures lists every module with its build and runtime state.
+  rpc GetFeatures(GetFeaturesRequest) returns (GetFeaturesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message GetHealthRequest {}
+
+message GetHealthResponse {
+  // Always "ok"; an unhealthy lab answers with an error instead.
+  string status = 1;
+  string version = 2;
+  double uptime_s = 3;
+  int64 active_campaigns = 4;
+  bool auth_required = 5;
+  // "all" (all-in-one process) or "sync" (split AWS gateway).
+  string mode = 6;
+  // "local-worker" or "sqs".
+  string async_transport = 7;
+  // Enabled modules in dependency order.
+  repeated string features = 8;
+}
+
+message GetFeaturesRequest {}
+
+message GetFeaturesResponse {
+  repeated string enabled = 1;
+  repeated Module modules = 2;
+  // Preset name to the modules it enables.
+  map<string, google.protobuf.ListValue> presets = 3;
+  BuildInfo build = 4;
+  // Environment variable that selects modules ("ARL_FEATURES").
+  string env = 5;
+}
+
+// Module is one optional feature of the lab.
+message Module {
+  string name = 1;
+  string title = 2;
+  repeated string requires = 3;
+  // False when the binary was built with the module's exclusion tag.
+  bool compiled = 4;
+  string build_tag = 5;
+  bool enabled = 6;
+}
+
+// BuildInfo reports which optional components are compiled in.
+message BuildInfo {
+  bool otel = 1;
+  bool sqs = 2;
+  bool ui = 3;
+  bool grpc = 4;
+}

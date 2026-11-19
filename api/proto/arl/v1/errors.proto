@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// ErrorDetail is attached to every gRPC/Connect error returned by the lab. It
+// carries the same machine-readable fields as the REST problem document
+// (application/problem+json), so one error-handling path works for both.
+message ErrorDetail {
+  // Stable error code, e.g. "validation_failed", "not_found",
+  // "feature_disabled". New codes may be added; clients must treat unknown
+  // codes like the gRPC status code they arrived with.
+  string code = 1;
+  // HTTP status the REST API would answer with.
+  int32 http_status = 2;
+  // Per-record validation errors (strings or objects), when there are any.
+  google.protobuf.ListValue errors = 3;
+  // Module that owns the operation, set when code is "feature_disabled".
+  string feature = 4;
+  // Request ID echoed in the X-Request-ID header; quote it in bug reports.
+  string request_id = 5;
+}

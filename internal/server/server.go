@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.vicoworks.com/agent-reliability-lab/api"
 	"go.vicoworks.com/agent-reliability-lab/internal/config"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"go.vicoworks.com/agent-reliability-lab/internal/engine"
@@ -19,6 +20,8 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +48,10 @@ type Server struct {
 	tickets                     map[string]ticket
 	// feature owns the routes being registered (see module); "" is the core.
 	feature features.Feature
+	// patterns lists every registered route, for the API contract test.
+	patterns []string
+	// rpc serves the gRPC, gRPC-Web and Connect API (nil with arl_nogrpc).
+	rpc http.Handler
 }
 type ticket struct {
 	Project string
@@ -76,6 +83,7 @@ func New(ctx context.Context, c config.Config, db *store.Store, doc string) (*Se
 	}
 	s := &Server{Config: c, DB: db, Q: q, Engine: engine.New(db, q, c), Hub: tracelab.NewHub(), Mux: http.NewServeMux(), Doc: doc, Started: time.Now(), slots: make(chan struct{}, domain.Max(1, c.MaxHTTP)), wsSlots: make(chan struct{}, domain.Max(1, c.MaxWebSockets)), uploadSlots: make(chan struct{}, 2), tickets: map[string]ticket{}}
 	s.routes()
+	s.rpc = s.rpcHandler()
 	return s, nil
 }
 func (s *Server) Authorized(r *http.Request) bool {
@@ -110,8 +118,22 @@ func (s *Server) OriginOK(r *http.Request) bool {
 	}
 	return false
 }
+
+// APIPrefix is where the stable REST contract (api/openapi.yaml) is served.
+// The unversioned /api/ prefix is an alias kept for the bundled UI and older
+// clients; it always follows the newest major version.
+const APIPrefix = "/api/v1/"
+
+var requestID = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if !requestID.MatchString(id) {
+			id = domain.ID("req")
+			r.Header.Set("X-Request-ID", id)
+		}
+		w.Header().Set("X-Request-ID", id)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if !strings.HasSuffix(r.URL.Path, "report.html") {
@@ -125,16 +147,25 @@ func (s *Server) Handler() http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Lab-Job-ID, Grpc-Status, Grpc-Message, Grpc-Status-Details-Bin")
 		}
 		if r.Method == "OPTIONS" {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Lab-Project, Last-Event-ID, Idempotency-Key")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Lab-Project, Last-Event-ID, Idempotency-Key, X-Request-ID, Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout, X-Grpc-Web, X-User-Agent")
+			w.Header().Set("Access-Control-Max-Age", "7200")
 			w.WriteHeader(204)
 			return
 		}
 		if r.URL.Path == "/v1/traces" {
 			// OTLP exporters configured with the lab root as endpoint.
 			r.URL.Path = "/api/otel/v1/traces"
+		}
+		if rest, ok := strings.CutPrefix(r.URL.Path, APIPrefix); ok {
+			r.URL.Path, r.URL.RawPath = "/api/"+rest, ""
+		}
+		if s.rpc != nil && isRPC(r.URL.Path) {
+			s.serveRPC(w, r)
+			return
 		}
 		if s.UI != nil && !strings.HasPrefix(r.URL.Path, "/api/") {
 			s.static(w, r)
@@ -148,7 +179,7 @@ func (s *Server) Handler() http.Handler {
 			s.websocket(w, r)
 			return
 		}
-		public := r.URL.Path == "/api/health" || strings.HasPrefix(r.URL.Path, "/api/auth/") || r.URL.Path == "/api/docs" || r.URL.Path == "/api/openapi.json"
+		public := r.URL.Path == "/api/health" || strings.HasPrefix(r.URL.Path, "/api/auth/") || r.URL.Path == "/api/docs" || r.URL.Path == "/api/openapi.json" || r.URL.Path == "/api/openapi.yaml"
 		if !public && !s.Authorized(r) {
 			writeError(w, &HTTPError{401, "authentication required"})
 			return
@@ -182,8 +213,12 @@ func (s *Server) handle(pattern string, handler http.HandlerFunc) {
 	if f := s.feature; f != "" && !s.Config.Features.On(f) {
 		handler = func(w http.ResponseWriter, r *http.Request) { writeError(w, s.unavailable(f)) }
 	}
+	s.patterns = append(s.patterns, pattern)
 	s.Mux.HandleFunc(pattern, handler)
 }
+
+// Routes lists the registered REST routes ("GET /api/health", ...).
+func (s *Server) Routes() []string { return slices.Clone(s.patterns) }
 func (s *Server) route(pattern string, handler func(*Request) (any, error)) {
 	s.handle(pattern, func(w http.ResponseWriter, r *http.Request) {
 		project := r.Header.Get("X-Lab-Project")
@@ -204,22 +239,58 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
+
+// errorCodes are the stable machine-readable error codes (api/README.md).
+var errorCodes = map[int]string{400: "bad_request", 401: "unauthenticated", 403: "forbidden", 404: "not_found", 405: "method_not_allowed", 409: "conflict", 413: "payload_too_large", 422: "validation_failed", 429: "rate_limited", 500: "internal", 503: "unavailable"}
+
+// writeError answers with an RFC 9457 problem document. "detail" is always a
+// human-readable string, "code" the stable machine-readable error code, and
+// structured data ("errors", "feature") are extension members.
 func writeError(w http.ResponseWriter, err error) {
-	status, detail := 500, any("internal operation failed; inspect server logs and job state")
+	status, problem := problemFor(err)
+	if id := w.Header().Get("X-Request-ID"); id != "" {
+		problem["request_id"] = id
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(problem)
+}
+func problemFor(err error) (int, M) {
+	status, detail, problem := 500, "internal operation failed; inspect server logs and job state", M{}
 	var api *HTTPError
 	if errors.As(err, &api) {
-		status, detail = api.Status, api.Detail
+		status = api.Status
+		if d, ok := api.Detail.(M); ok {
+			for k, v := range d {
+				problem[k] = v
+			}
+			detail = domain.Str(d["message"])
+			delete(problem, "message")
+		} else {
+			detail = fmt.Sprint(api.Detail)
+		}
 	} else if errors.Is(err, store.ErrNotFound) {
 		status, detail = 404, "resource not found"
 	} else if errors.Is(err, store.ErrConflict) {
 		status, detail = 409, "resource conflict"
 	} else if errors.Is(err, context.DeadlineExceeded) {
-		status, detail = 503, "async operation is still pending; retry with the same request or inspect /api/jobs"
+		status, detail, problem["code"] = 503, "async operation is still pending; retry with the same request or inspect /api/v1/jobs/{id}", "job_pending"
 	}
 	if status >= 500 {
 		slog.Warn("HTTP operation unavailable", "category", fmt.Sprintf("%T", err))
 	}
-	writeJSON(w, status, M{"detail": detail})
+	if problem["feature"] != nil {
+		problem["code"] = "feature_disabled"
+	}
+	if problem["code"] == nil {
+		problem["code"] = errorCodes[status]
+	}
+	if problem["code"] == "" {
+		problem["code"] = "error"
+	}
+	problem["type"] = "urn:arl:problem:" + domain.Str(problem["code"])
+	problem["title"], problem["status"], problem["detail"] = http.StatusText(status), status, detail
+	return status, problem
 }
 func (r *Request) Body(limit int64) (M, error) {
 	r.R.Body = http.MaxBytesReader(r.W, r.R.Body, limit)
@@ -288,7 +359,7 @@ func (s *Server) routes() {
 		return M{"status": "ok", "version": Version, "uptime_s": time.Since(s.Started).Seconds(), "active_campaigns": n, "auth_required": s.Config.AuthToken != "", "mode": s.Config.Mode, "async_transport": map[bool]string{true: "sqs", false: "local-worker"}[s.Config.QueueURL != ""], "features": s.Config.Features.Enabled()}, nil
 	})
 	s.route("GET /api/features", func(r *Request) (any, error) {
-		return M{"enabled": s.Config.Features.Enabled(), "modules": s.Config.Features.Describe(), "presets": features.Presets, "build": M{"otel": features.Compiled(features.OTel), "sqs": queue.SQSCompiled, "ui": s.UI != nil}, "env": "ARL_FEATURES"}, nil
+		return M{"enabled": s.Config.Features.Enabled(), "modules": s.Config.Features.Describe(), "presets": features.Presets, "build": M{"otel": features.Compiled(features.OTel), "sqs": queue.SQSCompiled, "ui": s.UI != nil, "grpc": rpcCompiled}, "env": "ARL_FEATURES"}, nil
 	})
 	s.route("GET /api/auth/status", func(r *Request) (any, error) {
 		return M{"auth_required": s.Config.AuthToken != "", "authenticated": s.Authorized(r.R)}, nil
@@ -321,10 +392,11 @@ func (s *Server) routes() {
 	s.route("GET /api/projects", projects)
 	s.route("POST /api/projects", createProject)
 	s.route("GET /api/jobs/{id}", jobStatus)
-	s.route("GET /api/openapi.json", openAPI)
-	s.Mux.HandleFunc("GET /api/docs", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("GET /api/openapi.json", contract("application/json", api.OpenAPIJSON))
+	s.handle("GET /api/openapi.yaml", contract("application/yaml", api.OpenAPIYAML))
+	s.handle("GET /api/docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, "<!doctype html><title>ARL Go API</title><h1>Agent Reliability Lab · Go API</h1><p><a href='/api/openapi.json'>OpenAPI document</a> · <a href='/api/agent-lab/connection.md'>WebSocket and backend integration</a></p><p>SYNC HTTP facade and persistent ASYNC jobs. X-Lab-Job-ID identifies durable jobs.</p>")
+		_, _ = io.WriteString(w, docsPage)
 	})
 	s.artifactRoutes()
 	s.module(features.Datasets, s.datasetRoutes)

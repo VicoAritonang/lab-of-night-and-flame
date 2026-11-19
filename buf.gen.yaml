@@ -1,0 +1,11 @@
+# Regenerate with: go generate ./api  (runs buf generate with the plugin
+# versions pinned in go.mod, so no global installs are needed)
+version: v2
+clean: true
+plugins:
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: api/gen
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-connect-go"]
+    out: api/gen
+    opt: paths=source_relative

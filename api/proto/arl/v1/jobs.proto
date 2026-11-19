@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// JobService exposes the durable job queue. Long operations started over REST
+// return the job ID in the X-Lab-Job-ID header; poll it here or at
+// GET /api/v1/jobs/{id}.
+service JobService {
+  rpc GetJob(GetJobRequest) returns (GetJobResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message Job {
+  string id = 1;
+  string kind = 2;
+  // One of "queued", "running", "done", "failed".
+  string state = 3;
+  int32 attempts = 4;
+  optional string error = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetJobRequest {
+  string id = 1;
+}
+
+message GetJobResponse {
+  Job job = 1;
+}

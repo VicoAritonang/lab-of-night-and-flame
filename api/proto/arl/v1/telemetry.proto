@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// TelemetryService carries the arl/1 agent protocol over a gRPC bidirectional
+// stream, for agents whose language has better gRPC than WebSocket support.
+// Frames, validation, limits and error codes are those of the WebSocket
+// endpoint /api/v1/agent-lab/ws (see connection.md and api/asyncapi.yaml):
+// the first frame must be Hello, every other frame is answered in order, and
+// the lab may push Replay frames at any time.
+// Requires HTTP/2 (h2c or TLS) and the "traces" module.
+service TelemetryService {
+  rpc Connect(stream ConnectRequest) returns (stream ConnectResponse);
+}
+
+// ConnectRequest is one frame from the agent to the lab.
+message ConnectRequest {
+  oneof frame {
+    Hello hello = 1;
+    Event event = 2;
+    Ping ping = 3;
+    ReplayStatus replay_status = 4;
+  }
+}
+
+// ConnectResponse is one frame from the lab to the agent.
+message ConnectResponse {
+  oneof frame {
+    HelloAck hello_ack = 1;
+    Ack ack = 2;
+    Pong pong = 3;
+    ProtocolError error = 4;
+    Replay replay = 5;
+  }
+}
+
+message Hello {
+  // Must be "arl/1".
+  string protocol = 1;
+  // 1-200 characters, e.g. "my-backend/support-agent".
+  string service = 2;
+  // Must be "dev".
+  string stage = 3;
+  // "agent" (default), "router" or "generic".
+  string lab = 4;
+  // 1-32 unique phase names; every event phase must be declared here.
+  repeated string phases = 5;
+  // e.g. "knowledge_graph", "tools", "images", "costs", "replay".
+  repeated string capabilities = 6;
+  google.protobuf.Struct metadata = 7;
+  // Defaults to the "x-lab-project" header, then "default".
+  string project_id = 8;
+  // Resume an existing session: both fields or neither.
+  string session_id = 9;
+  string resume_token = 10;
+}
+
+message HelloAck {
+  string protocol = 1;
+  string session_id = 2;
+  // Returned once, when the session is created. Keep it private.
+  string resume_token = 3;
+  string lab = 4;
+  repeated string phases = 5;
+  int64 max_message_bytes = 6;
+  int64 max_events_per_run = 7;
+  int64 max_trace_bytes = 8;
+  int32 heartbeat_seconds = 9;
+  repeated string features = 10;
+}
+
+// Event is one arl/1 event envelope.
+message Event {
+  // Unique per session; resending the same ID and payload is deduplicated.
+  string event_id = 1;
+  string run_id = 2;
+  // e.g. "run.start", "model.request", "tool.call", "run.end".
+  string event = 3;
+  // Defaults to "agent".
+  string phase = 4;
+  optional string span_id = 5;
+  optional string parent_span_id = 6;
+  // Client Unix time in seconds.
+  optional double timestamp = 7;
+  google.protobuf.Struct data = 8;
+}
+
+message Ack {
+  string event_id = 1;
+  string run_id = 2;
+  string trace_id = 3;
+  int64 ordinal = 4;
+  bool duplicate = 5;
+  // Set when acknowledging a ReplayStatus.
+  string replay_id = 6;
+}
+
+message Ping {}
+
+message Pong {
+  double timestamp = 1;
+  bool listening = 2;
+}
+
+// ProtocolError rejects one frame. The stream stays open, except after a
+// rejected Hello.
+message ProtocolError {
+  // e.g. "validation_error", "not_listening", "event_conflict".
+  string code = 1;
+  string message = 2;
+  string event_id = 3;
+}
+
+// Replay asks a replay-capable agent to re-run a saved scenario.
+message Replay {
+  string replay_id = 1;
+  string scenario_id = 2;
+  string source_trace_id = 3;
+  string name = 4;
+  google.protobuf.Value input = 5;
+  google.protobuf.Struct state = 6;
+  google.protobuf.Struct config = 7;
+  google.protobuf.Struct checks = 8;
+}
+
+message ReplayStatus {
+  string replay_id = 1;
+  // "started", "completed", "failed" or "rejected".
+  string status = 2;
+  string error = 3;
+}

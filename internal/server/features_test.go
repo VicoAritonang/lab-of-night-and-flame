@@ -26,11 +26,9 @@ func TestDisabledModulesAnswerWithReason(t *testing.T) {
 	for path, feature := range map[string]string{"/api/perf": "perf", "/api/experiments": "experiments", "/api/datasets": "datasets", "/api/prompts": "prompts", "/api/workbench/scenarios": "workbench", "/api/workbench/suites": "suites", "/api/alerts": "quality"} {
 		w := httptest.NewRecorder()
 		s.Handler().ServeHTTP(w, httptest.NewRequest("GET", path, nil))
-		var body struct {
-			Detail struct{ Message, Feature string }
-		}
+		var body struct{ Detail, Feature, Code string }
 		_ = json.Unmarshal(w.Body.Bytes(), &body)
-		if w.Code != 404 || body.Detail.Feature != feature || !strings.Contains(body.Detail.Message, "ARL_FEATURES") {
+		if w.Code != 404 || body.Feature != feature || body.Code != "feature_disabled" || !strings.Contains(body.Detail, "ARL_FEATURES") {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
 		}
 	}

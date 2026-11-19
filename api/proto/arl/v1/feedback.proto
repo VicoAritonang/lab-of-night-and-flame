@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// FeedbackService attaches scores, labels and comments from end users, human
+// reviewers and SDKs to runs. Mirrors /api/v1/feedback and
+// /api/v1/agent-lab/runs/{id}/feedback. Requires the "quality" module.
+service FeedbackService {
+  rpc ListFeedback(ListFeedbackRequest) returns (ListFeedbackResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateFeedback is idempotent when the "idempotency-key" header is set:
+  // repeating it updates the same feedback instead of adding another.
+  rpc CreateFeedback(CreateFeedbackRequest) returns (CreateFeedbackResponse);
+  rpc DeleteFeedback(DeleteFeedbackRequest) returns (DeleteFeedbackResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+}
+
+message Feedback {
+  string id = 1;
+  string trace_id = 2;
+  string name = 3;
+  optional double value = 4;
+  optional string label = 5;
+  optional string comment = 6;
+  // "user", "human", "sdk" or "auto" (online evaluators).
+  string source = 7;
+  string author = 8;
+  optional string queue_id = 9;
+  optional string evaluator_id = 10;
+  google.protobuf.Struct metadata = 11;
+  double created_at = 12;
+}
+
+message ListFeedbackRequest {
+  // Lab trace ID.
+  string trace_id = 1;
+}
+
+message ListFeedbackResponse {
+  repeated Feedback feedback = 1;
+}
+
+message CreateFeedbackRequest {
+  // Target run: trace_id, or the run_id the agent sent (optionally narrowed
+  // by service) for feedback the application sends later.
+  string trace_id = 1;
+  string run_id = 2;
+  string service = 3;
+  // 1-100 characters.
+  string name = 4;
+  // At least one of value, label or comment is required.
+  optional double value = 5;
+  optional string label = 6;
+  optional string comment = 7;
+  // "user" (default), "human" or "sdk".
+  string source = 8;
+  string author = 9;
+  google.protobuf.Struct metadata = 10;
+}
+
+message CreateFeedbackResponse {
+  Feedback feedback = 1;
+}
+
+message DeleteFeedbackRequest {
+  string id = 1;
+}
+
+message DeleteFeedbackResponse {
+  string deleted = 1;
+}

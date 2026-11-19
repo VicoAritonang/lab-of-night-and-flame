@@ -289,7 +289,9 @@ Handshake invalid mengirim error lalu close 1008; token auth salah ditolak sebel
 
 Ketiganya memakai kontrak yang sama: no-op di luar `STAGE=dev`, fail-open secara default (`LAB_REQUIRED=true` untuk test strict), satu request menunggu satu ACK (aman dipanggil paralel), heartbeat 20 detik, resend envelope identik saat ACK hilang, dan reconnect otomatis bila handler replay terdaftar. Helper tingkat tinggi: `run.input`, `run.snapshot`, `run.model_call`/`ModelCall`, `run.tool`, `run.output`, `run.end`. Contoh agent lengkap: [examples/python-agent](examples/python-agent/agent.py) dan [examples/go-agent](examples/go-agent/main.go).
 
-Session/resume token disimpan dalam memori client; ini bukan durable outbox lintas proses. Bahasa lain cukup mengikuti kontrak JSON di dokumen ini.
+Session/resume token disimpan dalam memori client; ini bukan durable outbox lintas proses. Bahasa lain cukup mengikuti kontrak JSON di dokumen ini; skema setiap frame tersedia sebagai AsyncAPI 3.0 di [api/asyncapi.yaml](api/asyncapi.yaml).
+
+**Alternatif gRPC.** Bahasa yang dukungan gRPC-nya lebih baik daripada WebSocket (Java, C#, Rust, Kotlin, dan sebagainya) dapat mengirim frame yang sama melalui stream dua arah `arl.v1.TelemetryService/Connect` ([api/proto/arl/v1/telemetry.proto](api/proto/arl/v1/telemetry.proto)) di port yang sama dengan HTTP, memakai HTTP/2 (h2c atau TLS) dan metadata `authorization: Bearer …` serta `x-lab-project`. Frame pertama wajib `hello`; validasi, batas ukuran, ACK, deduplikasi, kode error, dan frame `replay` identik dengan WebSocket karena keduanya memakai kode koneksi yang sama di server. Bedanya hanya pada transport: `data` dikirim sebagai `google.protobuf.Struct`.
 
 ## State snapshot, LLM step, dan replay (Workbench)
 
@@ -401,7 +403,7 @@ docker run --rm --network host ghcr.io/vicoaritonang/agent-reliability-lab:lates
 
 ## HTTP API dan fitur lab lain
 
-Semua URL di bawah relatif terhadap origin lab, dengan bearer token bila dikonfigurasi. Indeks HTTP tersedia di `/api/docs` dan `/api/openapi.json`; bentuk payload mengikuti halaman frontend dan contoh dalam dokumen ini; handshake WS dijelaskan di dokumen ini.
+Semua URL di bawah relatif terhadap origin lab, dengan bearer token bila dikonfigurasi. Kontrak stabil berada di prefix berversi `/api/v1/…` (prefix `/api/…` di bawah adalah alias untuk versi mayor terbaru). Spesifikasi lengkap: OpenAPI 3.1 di `/api/v1/openapi.json` (sumber: [api/openapi.yaml](api/openapi.yaml)), indeks di `/api/docs`, dan API gRPC/Connect `arl.v1` di port yang sama; aturan kompatibilitas dan kode error ada di [api/README.md](api/README.md). Error berupa RFC 9457 `application/problem+json` dengan `code` yang stabil.
 
 | Endpoint | Fungsi |
 | --- | --- |

@@ -52,6 +52,15 @@ func (c *Client) rest(ctx context.Context, method, path string, body any, out an
 	defer res.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 	if res.StatusCode >= 400 {
+		// RFC 9457 problem document: stable "code", human "detail".
+		var problem struct {
+			Code   string
+			Detail any
+		}
+		_ = json.Unmarshal(data, &problem)
+		if detail, ok := problem.Detail.(string); ok && problem.Code != "" {
+			return fmt.Errorf("lab HTTP %d %s: %s", res.StatusCode, problem.Code, detail)
+		}
 		return fmt.Errorf("lab HTTP %d", res.StatusCode)
 	}
 	if out == nil {

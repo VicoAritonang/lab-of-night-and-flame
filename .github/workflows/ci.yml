@@ -35,12 +35,45 @@ jobs:
       - run: go vet ./...
       - name: Slim build (every exclusion tag)
         run: |
-          go vet -tags arl_nosqs,arl_nootel,arl_noui ./...
-          go test -tags arl_nosqs,arl_nootel,arl_noui -count=1 ./internal/features ./internal/config
-          go test -tags arl_nosqs,arl_nootel,arl_noui -count=1 -run TestDisabledModules ./internal/server
+          go vet -tags arl_nosqs,arl_nootel,arl_noui,arl_nogrpc ./...
+          go test -tags arl_nosqs,arl_nootel,arl_noui,arl_nogrpc -count=1 ./internal/features ./internal/config
+          go test -tags arl_nosqs,arl_nootel,arl_noui,arl_nogrpc -count=1 -run 'TestDisabledModules|TestEveryRoute|TestErrorsAre|TestVersioned' ./internal/server
       - run: go test -p 1 -count=1 ./...
       - name: Race detector
         run: go test -race -p 1 -count=1 ./internal/... ./sdk/...
+
+  # The public contracts in api/: generated code must be current and the
+  # stable surface must not break (REST: api/testdata/stable-v1.json, checked by
+  # go test ./api; gRPC: buf breaking against the previous commit).
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - run: buf lint
+      - run: buf format --diff --exit-code
+      - name: Generated code is current
+        run: |
+          buf generate
+          go run ./api/internal/openapigen -dir api -check
+          git diff --exit-code -- api/gen
+      - name: No breaking gRPC changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE" ] && git cat-file -e "$BASE:api/proto" 2>/dev/null; then
+            buf breaking --against ".git#ref=$BASE"
+          else
+            echo "no earlier contract to compare with"
+          fi
+      - run: go test -count=1 ./api/...
 
   sdk-go:
     runs-on: ubuntu-latest

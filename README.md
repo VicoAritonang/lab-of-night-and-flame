@@ -233,19 +233,21 @@ enqueues and runs no jobs, disappears from the UI, and its API answers `404` wit
 reason. `GET /api/features` (and Settings → Modules) shows the current selection. In
 the split AWS deployment give the worker the same `ARL_FEATURES` as the gateway.
 
-To also drop the *code* of a part you never use, build with Go tags (default
-binary ≈ 23 MB, `linux/amd64`, stripped):
+To also drop the *code* of a part you never use, build with Go tags (sizes for
+`linux/amd64`, stripped, measured before the gRPC API was added; the gRPC API adds
+≈ 1.7 MB unless you also pass `arl_nogrpc`):
 
 | Tag | Leaves out | Binary |
 | --- | --- | --- |
+| `arl_nogrpc` | gRPC / gRPC-Web / Connect API (REST, WebSocket and OTLP stay) | ≈ −1.7 MB |
 | `arl_nosqs` | AWS SDK and the split SQS deployment | ≈ 19 MB |
 | `arl_nootel` | OTLP/protobuf decoder (`otel` module) | ≈ 18 MB |
 | `arl_nosqs,arl_nootel` | both | ≈ 15.6 MB |
 | `arl_nosqs,arl_nootel,arl_noui` | both + the embedded UI (API only) | ≈ 14 MB |
 
 ```bash
-go build -tags arl_nosqs,arl_nootel -o arl .
-docker build --build-arg ARL_BUILD_TAGS=arl_nosqs,arl_nootel -t arl:slim .
+go build -tags arl_nosqs,arl_nootel,arl_nogrpc -o arl .
+docker build --build-arg ARL_BUILD_TAGS=arl_nosqs,arl_nootel,arl_nogrpc -t arl:slim .
 ```
 
 The SDKs are separate from all of this: an agent imports only `sdk/go` (one
@@ -253,6 +255,30 @@ dependency, `coder/websocket`), `arl-lab` for Python or `arl-lab` for TypeScript
 (no dependencies), never the server module. With telemetry disabled (production, or
 no `LAB_WS_URL`) they are no-ops, and the Python SDK does not even import its
 WebSocket library.
+
+## API for any language
+
+The lab publishes versioned, tested contracts in [`api/`](api/README.md), so tools and
+agents can be written in any language, not only with the three SDKs:
+
+| Interface | Contract | Served at |
+| --- | --- | --- |
+| REST | OpenAPI 3.1, [`api/openapi.yaml`](api/openapi.yaml) | `/api/v1/…` (spec: `/api/v1/openapi.json`, index: `/api/docs`) |
+| gRPC, gRPC-Web, Connect | Protocol Buffers, package `arl.v1` ([`api/proto`](api/proto/arl/v1)) | same port; reflection and `grpc.health.v1` on |
+| Agent protocol arl/1 | AsyncAPI 3.0, [`api/asyncapi.yaml`](api/asyncapi.yaml) | WebSocket `/api/v1/agent-lab/ws` or `arl.v1.TelemetryService/Connect` |
+| OpenTelemetry | OTLP/HTTP | `/v1/traces` |
+
+```bash
+grpcurl -plaintext localhost:8000 list                       # services
+curl -s localhost:8000/api/v1/health                          # REST
+npx @openapitools/openapi-generator-cli generate -i api/openapi.yaml -g python -o client
+```
+
+Errors are RFC 9457 problem documents with a stable `code` (the same fields reach
+gRPC clients as `arl.v1.ErrorDetail`); every response carries `X-Request-ID`.
+Operations marked `stable` (system, traces, OTLP, feedback, prompts) only change
+additively within v1; CI fails on a breaking change. Details, error codes and the
+compatibility promise are in [api/README.md](api/README.md).
 
 ## Development
 
@@ -270,7 +296,8 @@ cd frontend && npm ci && npm run dev
 (cd sdk/typescript && npm install && npm test)
 ```
 
-Repository layout: `main.go` (server), `internal/` (engine, tracing, workbench,
+Repository layout: `main.go` (server), `api/` (OpenAPI, protobuf and AsyncAPI
+contracts, generated gRPC code), `internal/` (engine, tracing, workbench,
 providers, storage), `web/` (embedded UI), `frontend/` (React UI), `sdk/` (Go,
 Python, TypeScript), `examples/`, `sql/`, `cmd/` (worker, Lambda, admin, packager).
 
@@ -284,4 +311,5 @@ lab still lacks — is in [ROADMAP.md](ROADMAP.md).
 
 ## License
 
-[Apache-2.0](LICENSE)
+Copyright 2026 Vico Winner Sebastian Aritonang. Licensed under the
+[Apache License 2.0](LICENSE); see also [NOTICE](NOTICE).

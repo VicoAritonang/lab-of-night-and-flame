@@ -18,9 +18,11 @@ async function parse(res: Response): Promise<any> {
   try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   if (!res.ok) {
     if (res.status === 401) authListeners.forEach((f) => f());
+    // RFC 9457 problem document: string detail, structured data as members.
     const d = body?.detail ?? body;
     const msg = typeof d === "string" ? d : d?.message ?? `HTTP ${res.status}`;
-    const errs: string[] = Array.isArray(d?.errors) ? d.errors.map((e: any) => (typeof e === "string" ? e : e.error ? `#${e.record ?? e.line}: ${e.error}` : JSON.stringify(e))) : [];
+    const list = Array.isArray(body?.errors) ? body.errors : d?.errors;
+    const errs: string[] = Array.isArray(list) ? list.map((e: any) => (typeof e === "string" ? e : e.error ? `#${e.record ?? e.line}: ${e.error}` : JSON.stringify(e))) : [];
     throw new ApiError(res.status, msg, errs);
   }
   return body;

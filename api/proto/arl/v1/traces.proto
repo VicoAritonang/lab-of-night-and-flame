@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package arl.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "go.vicoworks.com/agent-reliability-lab/api/gen/arl/v1;arlv1";
+option java_multiple_files = true;
+option java_package = "com.vicoworks.arl.v1";
+
+// TraceService reads what agents reported over arl/1, OTLP or
+// TelemetryService: sessions, runs (traces) and their ordered events.
+// Mirrors /api/v1/agent-lab/*. Requires the "traces" module.
+service TraceService {
+  // ListSessions returns the 200 most recently seen agent sessions.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListRuns lists runs newest first. Page backwards with "before".
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GetRun returns one run with its profile, check configuration and summary.
+  rpc GetRun(GetRunRequest) returns (GetRunResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListRunEvents pages through events in ingest order (ordinal).
+  rpc ListRunEvents(ListRunEventsRequest) returns (ListRunEventsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message Session {
+  string id = 1;
+  string service = 2;
+  // Handshake profile: lab, phases, capabilities, metadata.
+  google.protobuf.Struct config = 3;
+  double created_at = 4;
+  double last_seen = 5;
+  bool connected = 6;
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// RunSummary is one row of the run list, with rollups kept at ingest time.
+message RunSummary {
+  // Lab-assigned trace ID.
+  string id = 1;
+  string session_id = 2;
+  // The run_id the agent sent.
+  string external_id = 3;
+  string name = 4;
+  // "running", "completed", "failed" or "cancelled".
+  string status = 5;
+  double started_at = 6;
+  optional double finished_at = 7;
+  int32 event_count = 8;
+  string service = 9;
+  string lab = 10;
+  optional double duration_ms = 11;
+  double cost_usd = 12;
+  int64 tokens_in = 13;
+  int64 tokens_out = 14;
+  int32 model_calls = 15;
+  int32 tool_calls = 16;
+  int32 errors = 17;
+  repeated string models = 18;
+  repeated string tags = 19;
+  optional string thread_id = 20;
+  optional string user_id = 21;
+  // "sdk", "otel", "replay", ...
+  string source = 22;
+  optional string verdict = 23;
+  int32 feedback_count = 24;
+}
+
+message ListRunsRequest {
+  string service_name = 1;
+  string status = 2;
+  string verdict = 3;
+  string model = 4;
+  string tag = 5;
+  string thread_id = 6;
+  string user_id = 7;
+  string source = 8;
+  // Matches name (substring), external run_id or trace ID.
+  string q = 9;
+  double min_ms = 10;
+  // Only runs with errors or status "failed".
+  bool errors = 11;
+  // Cursor: only runs started before this Unix time.
+  double before = 12;
+  // Only runs started in the last N hours.
+  double hours = 13;
+  // 1-500, default 100.
+  int32 limit = 14;
+}
+
+message ListRunsResponse {
+  repeated RunSummary runs = 1;
+}
+
+message Run {
+  string id = 1;
+  string session_id = 2;
+  string external_id = 3;
+  string name = 4;
+  string status = 5;
+  google.protobuf.Struct check_config = 6;
+  double started_at = 7;
+  optional double finished_at = 8;
+  int32 event_count = 9;
+  string service = 10;
+  google.protobuf.Struct config = 11;
+  string lab = 12;
+  optional string thread_id = 13;
+  optional string user_id = 14;
+  repeated string tags = 15;
+  string source = 16;
+  // Derived analysis: phases, graph, costs, check verdicts.
+  google.protobuf.Struct summary = 17;
+}
+
+message GetRunRequest {
+  string id = 1;
+}
+
+message GetRunResponse {
+  Run run = 1;
+}
+
+// RunEvent is a stored arl/1 event envelope plus its ingest position.
+message RunEvent {
+  int64 ordinal = 1;
+  double received_at = 2;
+  string event_id = 3;
+  string run_id = 4;
+  string event = 5;
+  string phase = 6;
+  optional string span_id = 7;
+  optional string parent_span_id = 8;
+  optional double timestamp = 9;
+  google.protobuf.Struct data = 10;
+}
+
+message ListRunEventsRequest {
+  string id = 1;
+  // Return events with an ordinal greater than this.
+  int64 after = 2;
+  // 1-1000, default 500.
+  int32 limit = 3;
+}
+
+message ListRunEventsResponse {
+  repeated RunEvent items = 1;
+  bool has_more = 2;
+}

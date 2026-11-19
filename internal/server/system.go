@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"go.vicoworks.com/agent-reliability-lab/internal/features"
 	"go.vicoworks.com/agent-reliability-lab/internal/scoring"
@@ -238,19 +237,4 @@ func jobStatus(r *Request) (any, error) {
 		return nil, err
 	}
 	return M{"id": id, "kind": kind, "state": state, "attempts": attempts, "error": message, "created_at": created, "updated_at": updated}, nil
-}
-func openAPI(r *Request) (any, error) {
-	paths := M{}
-	for path, methods := range map[string][]string{"/health": {"get"}, "/auth/status": {"get"}, "/auth/login": {"post"}, "/auth/logout": {"post"}, "/overview": {"get"}, "/providers": {"get"}, "/connections": {"post"}, "/catalog": {"get"}, "/scorers": {"get"}, "/artifacts": {"post"}, "/artifacts/{digest}": {"get"}, "/datasets": {"get"}, "/datasets/import": {"post"}, "/datasets/{id}": {"get", "delete"}, "/datasets/{id}/samples": {"get"}, "/datasets/{id}/predictions": {"post"}, "/experiments/preflight": {"post"}, "/experiments": {"get", "post"}, "/experiments/{id}": {"get"}, "/experiments/{id}/launch": {"post"}, "/campaigns": {"get"}, "/campaigns/{id}": {"get"}, "/campaigns/{id}/grid": {"get"}, "/campaigns/{id}/events": {"get"}, "/campaigns/{id}/trials": {"get"}, "/campaigns/{id}/results": {"get"}, "/campaigns/{id}/cancel": {"post"}, "/campaigns/{id}/resume": {"post"}, "/campaigns/{id}/rerun": {"post"}, "/campaigns/{id}/rescore": {"post"}, "/trials/{id}": {"get"}, "/playground": {"post"}, "/audit": {"get"}, "/projects": {"get", "post"}, "/jobs/{id}": {"get"}, "/agent-lab/status": {"get"}, "/agent-lab/sessions": {"get"}, "/agent-lab/config": {"post"}, "/agent-lab/listener/start": {"post"}, "/agent-lab/listener/stop": {"post"}, "/agent-lab/runs": {"get"}, "/agent-lab/runs/{id}": {"get"}, "/agent-lab/runs/{id}/events": {"get"}, "/agent-lab/runs/{id}/export": {"get"}, "/agent-lab/runs/{id}/feedback": {"get", "post"}, "/feedback": {"post"}, "/feedback/{id}": {"delete"}, "/otel/v1/traces": {"get", "post"}, "/monitor/metrics": {"get"}, "/monitor/facets": {"get"}, "/annotation/queues": {"get", "post"}, "/annotation/queues/{id}": {"get", "post", "delete"}, "/annotation/queues/{id}/items": {"get", "post"}, "/annotation/queues/{id}/next": {"get"}, "/annotation/queues/{id}/agreement": {"get"}, "/annotation/items/{id}/submit": {"post"}, "/annotation/items/{id}/skip": {"post"}, "/evaluators": {"get", "post"}, "/evaluators/{id}": {"post", "delete"}, "/evaluators/{id}/backfill": {"post"}, "/evaluators/test": {"post"}, "/alerts": {"get", "post"}, "/alerts/{id}": {"post", "delete"}, "/alerts/events": {"get"}, "/alerts/check": {"post"}, "/prompts": {"get", "post"}, "/prompts/{name}": {"get", "delete"}, "/prompts/{name}/versions": {"get", "post"}, "/prompts/{name}/labels": {"post"}, "/prompts/{name}/render": {"post"}, "/workbench/suites": {"get", "post"}, "/workbench/suites/{id}": {"get"}, "/perf": {"get", "post"}, "/perf/{id}": {"get", "delete"}, "/perf/{id}/cancel": {"post"}} {
-		ops := M{}
-		for _, method := range methods {
-			op := M{"summary": strings.ToUpper(method) + " " + path, "responses": M{"200": M{"description": "Success"}, "401": M{"description": "Owner authentication required"}, "422": M{"description": "Validation error"}, "503": M{"description": "Durable job still pending; retry or inspect X-Lab-Job-ID"}}}
-			if method == "post" {
-				op["requestBody"] = M{"content": M{"application/json": M{"schema": M{"type": "object"}}}}
-			}
-			ops[method] = op
-		}
-		paths["/api"+path] = ops
-	}
-	return M{"openapi": "3.1.0", "info": M{"title": "Agent Reliability Lab · Go SYNC/ASYNC", "version": Version}, "paths": paths, "components": M{"securitySchemes": M{"owner": M{"type": "http", "scheme": "bearer"}}}, "security": []M{{"owner": []string{}}}, "externalDocs": M{"url": "/api/agent-lab/connection.md", "description": fmt.Sprint("arl/1 telemetry and asynchronous deployment")}}, nil
 }

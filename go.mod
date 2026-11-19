@@ -5,6 +5,9 @@ go 1.26.0
 toolchain go1.26.9
 
 require (
+	connectrpc.com/connect v1.21.1
+	connectrpc.com/grpchealth v1.5.0
+	connectrpc.com/grpcreflect v1.3.1
 	github.com/aws/aws-lambda-go v1.55.1
 	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.9
@@ -13,9 +16,15 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	go.opentelemetry.io/proto/otlp v1.11.0
+	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/image v0.47.0
 	golang.org/x/text v0.43.0
 	google.golang.org/protobuf v1.36.11
+)
+
+require (
+	github.com/kr/text v0.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.16.0 // indirect
 )
 
 require (
@@ -39,3 +48,8 @@ require (
 )
 
 replace go.vicoworks.com/agent-reliability-lab/sdk/go => ./sdk/go
+
+tool (
+	connectrpc.com/connect/cmd/protoc-gen-connect-go
+	google.golang.org/protobuf/cmd/protoc-gen-go
+)

@@ -1,0 +1,5071 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agent Reliability Lab API",
+    "version": "1.0.0",
+    "summary": "Capture, replay and evaluate AI agents from any programming language.",
+    "description": "REST contract of Agent Reliability Lab, version 1. The same lab also serves\nthe typed gRPC/Connect API `arl.v1` (api/proto/arl/v1) and the arl/1 agent\nprotocol over WebSocket (api/asyncapi.yaml).\n\n**Versioning.** Paths below are relative to `/api/v1`. Within v1 the lab\nonly makes additive changes to operations marked `x-stability-level: stable`:\nnew operations, new optional parameters, new response fields and new\nerror codes. Clients must ignore unknown fields. Operations marked `beta`\nmay still change between minor releases; changes are announced in the\nrelease notes. Removing or renaming anything stable requires `/api/v2`.\nThe unversioned `/api` prefix is an alias of the newest major version,\nkept for the bundled UI.\n\n**Projects.** One lab owner can keep data in several projects. Select one\nwith the `X-Lab-Project` header (default `default`).\n\n**Errors** are RFC 9457 problem documents (`application/problem+json`)\nwith a stable machine-readable `code`; see the `Problem` schema.\n\n**Durable jobs.** Long operations run on the lab's job queue. They answer\nwith the job ID in `X-Lab-Job-ID`; when the result is not ready within\nthe server's wait budget the answer is `503` with code `job_pending`.\nRetry with the same `Idempotency-Key`, or poll `GET /jobs/{id}`.\n\n**Optional modules.** Operations owned by a module that the deployment\ndisabled (ARL_FEATURES) answer `404` with code `feature_disabled`; the\nmodule of each tag is given as `x-arl-feature`.\n",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "contact": {
+      "name": "Vico Winner Sebastian Aritonang",
+      "url": "https://github.com/VicoAritonang/lab-of-night-and-flame"
+    }
+  },
+  "externalDocs": {
+    "description": "arl/1 integration guide",
+    "url": "https://github.com/VicoAritonang/lab-of-night-and-flame/blob/main/connection.md"
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "The lab that serves this document"
+    },
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Local lab started with docker compose"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    },
+    {
+      "cookie": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "system",
+      "description": "Health, modules, authentication, projects and durable jobs."
+    },
+    {
+      "name": "models",
+      "description": "Model providers, the model catalog and scorers."
+    },
+    {
+      "name": "traces",
+      "description": "Agent sessions, runs and events captured over arl/1, gRPC or OTLP.",
+      "x-arl-feature": "traces"
+    },
+    {
+      "name": "otel",
+      "description": "OTLP/HTTP trace ingest (OpenTelemetry GenAI, OpenInference, OpenLLMetry).",
+      "x-arl-feature": "otel"
+    },
+    {
+      "name": "quality",
+      "description": "Feedback, annotation queues, online evaluators and alerts.",
+      "x-arl-feature": "quality"
+    },
+    {
+      "name": "monitor",
+      "description": "Aggregated metrics over traces.",
+      "x-arl-feature": "monitor"
+    },
+    {
+      "name": "prompts",
+      "description": "Versioned prompt registry with movable labels.",
+      "x-arl-feature": "prompts"
+    },
+    {
+      "name": "workbench",
+      "description": "Saved agent scenarios, replays and LLM steps.",
+      "x-arl-feature": "workbench"
+    },
+    {
+      "name": "suites",
+      "description": "Workbench regression suites (arl suite in CI).",
+      "x-arl-feature": "suites"
+    },
+    {
+      "name": "datasets",
+      "description": "Datasets, samples, predictions and media artifacts.",
+      "x-arl-feature": "datasets"
+    },
+    {
+      "name": "experiments",
+      "description": "Experiments, campaigns, trials and reports.",
+      "x-arl-feature": "experiments"
+    },
+    {
+      "name": "playground",
+      "description": "One-off model calls.",
+      "x-arl-feature": "playground"
+    },
+    {
+      "name": "perf",
+      "description": "Load tests of model endpoints.",
+      "x-arl-feature": "perf"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "tags": [
+          "system"
+        ],
+        "summary": "Check health",
+        "description": "Checks the database and reports version and enabled modules. No authentication.",
+        "security": [],
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "The lab is healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/features": {
+      "get": {
+        "operationId": "getFeatures",
+        "tags": [
+          "system"
+        ],
+        "summary": "List modules",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Every module with its build and runtime state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Features"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/status": {
+      "get": {
+        "operationId": "getAuthStatus",
+        "tags": [
+          "system"
+        ],
+        "summary": "Report authentication state",
+        "security": [],
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Whether a token is required and whether this request carries it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "tags": [
+          "system"
+        ],
+        "summary": "Exchange the owner token for a session cookie",
+        "security": [],
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "The value of ARL_AUTH_TOKEN."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated; an HttpOnly `arl_token` cookie is set when auth is enabled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "authenticated"
+                  ],
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": [
+          "system"
+        ],
+        "summary": "Clear the session cookie",
+        "security": [],
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/projects": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listProjects",
+        "tags": [
+          "system"
+        ],
+        "summary": "List projects",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "All projects, oldest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Project"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createProject",
+        "tags": [
+          "system"
+        ],
+        "summary": "Create a project",
+        "description": "Fails with `409 conflict` when the ID is taken.",
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The project was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectCreate"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/jobs/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getJob",
+        "tags": [
+          "system"
+        ],
+        "summary": "Get a durable job",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "The job state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/audit": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listAudit",
+        "tags": [
+          "system"
+        ],
+        "summary": "List the audit log",
+        "x-stability-level": "beta",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/overview": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "getOverview",
+        "tags": [
+          "system"
+        ],
+        "summary": "Summarize the project for the dashboard",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenAPIJSON",
+        "tags": [
+          "system"
+        ],
+        "summary": "This document as JSON",
+        "security": [],
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.yaml": {
+      "get": {
+        "operationId": "getOpenAPIYAML",
+        "tags": [
+          "system"
+        ],
+        "summary": "This document as YAML",
+        "security": [],
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1 document.",
+            "content": {
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "operationId": "getDocs",
+        "tags": [
+          "system"
+        ],
+        "summary": "Human-readable API index",
+        "security": [],
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "HTML page linking every contract.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/providers": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listProviders",
+        "tags": [
+          "models"
+        ],
+        "summary": "List model providers and their status",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/connections": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "createConnection",
+        "tags": [
+          "models"
+        ],
+        "summary": "Add an OpenAI-compatible provider",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Ok"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/catalog": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listModels",
+        "tags": [
+          "models"
+        ],
+        "summary": "Search the model catalog",
+        "x-stability-level": "beta",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "modality",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "free",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "price",
+                "context",
+                "newest"
+              ]
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/scorers": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listScorers",
+        "tags": [
+          "models"
+        ],
+        "summary": "List built-in scorers",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/status": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "getListenerStatus",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Get the agent listener state",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Listener state and connected agents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListenerStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/listener/start": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "startListener",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Accept agent connections for the project",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Listener state after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListenerStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/listener/stop": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "stopListener",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Stop accepting events and disconnect agents",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Listener state after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListenerStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/config": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "setListenerConfig",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Set default checks for captured runs",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/connection.md": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "getConnectionGuide",
+        "tags": [
+          "traces"
+        ],
+        "summary": "arl/1 integration guide",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Markdown guide.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/ticket": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "createWebSocketTicket",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Issue a single-use WebSocket ticket",
+        "description": "For browsers, which cannot set headers on WebSocket connections. Open `/api/v1/agent-lab/ws?ticket=...` within 30 seconds.",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "The ticket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ticket",
+                    "expires_in"
+                  ],
+                  "properties": {
+                    "ticket": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "integer",
+                      "description": "Seconds."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "traces"
+        ],
+        "summary": "List agent sessions",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "The 200 most recently seen sessions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Session"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/runs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listRuns",
+        "tags": [
+          "traces"
+        ],
+        "summary": "List runs, newest first",
+        "x-stability-level": "stable",
+        "parameters": [
+          {
+            "name": "service_name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "verdict",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Name substring",
+            "run_id or trace ID.": null,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_ms",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "errors",
+            "in": "query",
+            "description": "Only runs with errors or status failed.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Cursor",
+            "only runs started before this Unix time.": null,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "description": "Only runs started in the last N hours.",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching runs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunSummary"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/runs/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getRun",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Get a run with its summary",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "The run.",
+            "headers": {
+              "X-Lab-Job-ID": {
+                "$ref": "#/components/headers/JobID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/runs/{id}/events": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "listRunEvents",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Page through the events of a run",
+        "x-stability-level": "stable",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Return events with an ordinal greater than this.",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events in ingest order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunEventPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/runs/{id}/export": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "exportRun",
+        "tags": [
+          "traces"
+        ],
+        "summary": "Download a run with all events",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "JSON attachment.",
+            "headers": {
+              "X-Lab-Job-ID": {
+                "$ref": "#/components/headers/JobID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/otel/v1/traces": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "getOtlpInfo",
+        "tags": [
+          "otel"
+        ],
+        "summary": "Describe the OTLP endpoint",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Accepted encodings and exporter settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtlpInfo"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "exportOtlpTraces",
+        "tags": [
+          "otel"
+        ],
+        "summary": "Ingest OTLP/HTTP traces",
+        "description": "OTLP/HTTP ExportTraceServiceRequest, protobuf or JSON, optionally gzip\nencoded. Also served at `/v1/traces` so exporters can use the lab root\nas `OTEL_EXPORTER_OTLP_ENDPOINT`. A `503` (listener stopped or storage\nbusy) tells standard exporters to retry.\n",
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-protobuf": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ExportTraceServiceResponse in the request encoding.",
+            "content": {
+              "application/x-protobuf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/agent-lab/runs/{id}/feedback": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "listRunFeedback",
+        "tags": [
+          "quality"
+        ],
+        "summary": "List feedback on a run, newest first",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Feedback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Feedback"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createRunFeedback",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Add feedback to a run",
+        "x-stability-level": "stable",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored feedback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackStored"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/feedback": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "createFeedback",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Add feedback by trace_id or by the agent run_id",
+        "description": "Lets the application send feedback later (e.g. a thumbs-up in its UI) using its own run_id.",
+        "x-stability-level": "stable",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/FeedbackCreate"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "trace_id": {
+                        "type": "string"
+                      },
+                      "run_id": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string",
+                        "description": "Narrows run_id when several services reuse it."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored feedback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackStored"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/feedback/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "delete": {
+        "operationId": "deleteFeedback",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Delete feedback",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/queues": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listAnnotationQueues",
+        "tags": [
+          "quality"
+        ],
+        "summary": "List annotation queues",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAnnotationQueue",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create an annotation queue",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/queues/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getAnnotationQueue",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Get an annotation queue",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateAnnotationQueue",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Replace an annotation queue",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAnnotationQueue",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Delete an annotation queue",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/queues/{id}/items": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "listAnnotationItems",
+        "tags": [
+          "quality"
+        ],
+        "summary": "List queue items",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addAnnotationItems",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Add traces to a queue",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/queues/{id}/next": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "nextAnnotationItem",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Claim the next item to annotate",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/queues/{id}/agreement": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getAnnotationAgreement",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Inter-annotator and judge agreement",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/items/{id}/submit": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "submitAnnotation",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Submit an annotation",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/annotation/items/{id}/skip": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "skipAnnotation",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Skip an item",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/evaluators": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listEvaluators",
+        "tags": [
+          "quality"
+        ],
+        "summary": "List online evaluators",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createEvaluator",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create an online evaluator",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/evaluators/test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "testEvaluator",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Dry-run an evaluator on a trace",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/evaluators/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "updateEvaluator",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Replace an evaluator",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteEvaluator",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Delete an evaluator",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/evaluators/{id}/backfill": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "backfillEvaluator",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Score existing traces",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalJson"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listAlerts",
+        "tags": [
+          "quality"
+        ],
+        "summary": "List alert rules",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAlert",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Create an alert rule",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/alerts/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "updateAlert",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Replace an alert rule",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAlert",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Delete an alert rule",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/alerts/events": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listAlertEvents",
+        "tags": [
+          "quality"
+        ],
+        "summary": "List fired alerts",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/alerts/check": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "checkAlerts",
+        "tags": [
+          "quality"
+        ],
+        "summary": "Evaluate alert rules now",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/monitor/metrics": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "getMonitorMetrics",
+        "tags": [
+          "monitor"
+        ],
+        "summary": "Time series and percentiles over traces",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/monitor/facets": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "getMonitorFacets",
+        "tags": [
+          "monitor"
+        ],
+        "summary": "Filter values seen in traces",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/prompts": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listPrompts",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "List prompts, recently updated first",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Prompts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Prompt"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "commitPrompt",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "Commit a prompt version, creating the prompt when needed",
+        "description": "Committing a template and config identical to the latest version without labels returns that version with `created` false.",
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/PromptCommit"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The committed version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptCommitted"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/prompts/{name}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Name"
+        }
+      ],
+      "get": {
+        "operationId": "getPrompt",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "Resolve a prompt version by label, version or latest",
+        "x-stability-level": "stable",
+        "parameters": [
+          {
+            "name": "label",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The resolved version with the prompt labels.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptResolved"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePrompt",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "Delete a prompt and its versions",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Deleted"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/prompts/{name}/versions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Name"
+        }
+      ],
+      "get": {
+        "operationId": "listPromptVersions",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "List versions, newest first",
+        "x-stability-level": "stable",
+        "responses": {
+          "200": {
+            "description": "Versions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PromptVersion"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "commitPromptVersion",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "Commit a version of an existing prompt",
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptCommit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The committed version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptCommitted"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/prompts/{name}/labels": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Name"
+        }
+      ],
+      "post": {
+        "operationId": "setPromptLabel",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "Point a label at a version",
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "label",
+                  "version"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_-]{0,39}$"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The prompt with its labels.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prompt"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/prompts/{name}/render": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Name"
+        }
+      ],
+      "post": {
+        "operationId": "renderPrompt",
+        "tags": [
+          "prompts"
+        ],
+        "summary": "Fill a version template with variables",
+        "x-stability-level": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  },
+                  "variables": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Messages ready to send to a model.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptRendered"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/agents": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listReplayAgents",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "List connected replay-capable agents",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/scenarios": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listScenarios",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "List scenarios",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createScenario",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Save a scenario",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/scenarios/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getScenario",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Get a scenario",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateScenario",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Replace a scenario",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteScenario",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Delete a scenario",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/from-trace": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "createScenarioFromTrace",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Save a captured run as a scenario",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/run": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "runScenario",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Replay a scenario on an agent or run an LLM step",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/runs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listScenarioRuns",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "List replays",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/runs/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getScenarioRun",
+        "tags": [
+          "workbench"
+        ],
+        "summary": "Get a replay",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/suites": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listSuites",
+        "tags": [
+          "suites"
+        ],
+        "summary": "List suite runs",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSuite",
+        "tags": [
+          "suites"
+        ],
+        "summary": "Run a regression suite",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/workbench/suites/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getSuite",
+        "tags": [
+          "suites"
+        ],
+        "summary": "Get a suite run with its gate verdict",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/artifacts": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "uploadArtifact",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Upload an image artifact",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/artifacts/{digest}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "name": "digest",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getArtifact",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Download an artifact",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "description": "The stored file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/datasets": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listDatasets",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List datasets",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/datasets/import": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "importDataset",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Import a JSONL dataset",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/datasets/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getDataset",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Get a dataset",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDataset",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Delete a dataset",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/datasets/{id}/samples": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "listDatasetSamples",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Page through samples",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/datasets/{id}/predictions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "importPredictions",
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Import predictions made outside the lab",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/experiments/preflight": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "preflightExperiment",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Estimate cost and check an experiment",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/experiments": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listExperiments",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "List experiments",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createExperiment",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Create an experiment",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/experiments/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getExperiment",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Get an experiment",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/experiments/{id}/launch": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "launchExperiment",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Launch a campaign",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalJson"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listCampaigns",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "List campaigns",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getCampaign",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Get a campaign",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/grid": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getCampaignGrid",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Model by sample result grid",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/events": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "streamCampaignEvents",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Follow campaign progress (Server-Sent Events)",
+        "x-stability-level": "beta",
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event stream.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/trials": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "listCampaignTrials",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Page through trials",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/results": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getCampaignResults",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Statistics and comparisons",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/cancel": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "cancelCampaign",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Cancel a campaign",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/resume": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "resumeCampaign",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Resume a campaign",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/rerun": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "rerunCampaign",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Rerun failed trials",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalJson"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/rescore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "rescoreCampaign",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Rescore trials with the current scorers",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalJson"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/report.html": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getCampaignReportHTML",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Campaign report (HTML)",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "description": "Report.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/report.md": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getCampaignReportMarkdown",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Campaign report (Markdown)",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "description": "Report.",
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/report.json": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getCampaignReportJSON",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Campaign report (JSON)",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/trials/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getTrial",
+        "tags": [
+          "experiments"
+        ],
+        "summary": "Get a trial with attempts and assessments",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/playground": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "post": {
+        "operationId": "runPlayground",
+        "tags": [
+          "playground"
+        ],
+        "summary": "Call one or more models once",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/perf": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        }
+      ],
+      "get": {
+        "operationId": "listPerfRuns",
+        "tags": [
+          "perf"
+        ],
+        "summary": "List load tests",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPerfRun",
+        "tags": [
+          "perf"
+        ],
+        "summary": "Start a load test",
+        "x-stability-level": "beta",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/Json"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/perf/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getPerfRun",
+        "tags": [
+          "perf"
+        ],
+        "summary": "Get a load test",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePerfRun",
+        "tags": [
+          "perf"
+        ],
+        "summary": "Delete a load test",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/perf/{id}/cancel": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Project"
+        },
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "cancelPerfRun",
+        "tags": [
+          "perf"
+        ],
+        "summary": "Cancel a load test",
+        "x-stability-level": "beta",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Json"
+          },
+          "default": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The lab owner token (ARL_AUTH_TOKEN). Not required when the lab runs without one."
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "arl_token",
+        "description": "Set by POST /auth/login; used by the web UI."
+      }
+    },
+    "parameters": {
+      "Project": {
+        "name": "X-Lab-Project",
+        "in": "header",
+        "description": "Project to read and write. Defaults to `default`.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "default": "default"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "description": "Repeating a request with the same key returns or updates the same resource instead of creating another.",
+        "schema": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "Id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Name": {
+        "name": "name",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,99}$"
+        }
+      }
+    },
+    "headers": {
+      "JobID": {
+        "description": "Durable job created for this request; poll GET /jobs/{id}.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RequestID": {
+        "description": "Request identifier, echoed from the request or generated. Quote it in bug reports.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "requestBodies": {
+      "Json": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "OptionalJson": {
+        "required": false,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "Error, as an RFC 9457 problem document.",
+        "headers": {
+          "X-Request-ID": {
+            "$ref": "#/components/headers/RequestID"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Json": {
+        "description": "Success. The body of beta operations is a JSON value whose shape may still change.",
+        "content": {
+          "application/json": {
+            "schema": {}
+          }
+        }
+      },
+      "Ok": {
+        "description": "Success.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "Deleted": {
+        "description": "The resource was deleted.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "deleted"
+              ],
+              "properties": {
+                "deleted": {
+                  "type": "string",
+                  "description": "ID of the deleted resource."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 problem details. Unknown members must be ignored.",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`urn:arl:problem:\u003ccode\u003e`."
+          },
+          "title": {
+            "type": "string",
+            "description": "HTTP reason phrase."
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Human-readable explanation. Do not parse it."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code. Current values: bad_request,\nunauthenticated, forbidden, not_found, feature_disabled,\nmethod_not_allowed, conflict, payload_too_large,\nvalidation_failed, rate_limited, internal, unavailable,\njob_pending. New codes may be added; treat unknown codes by their\nHTTP status.\n"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "feature": {
+            "type": "string",
+            "description": "Disabled module",
+            "with code feature_disabled.": null
+          },
+          "errors": {
+            "type": "array",
+            "description": "Per-record validation errors, with code validation_failed.",
+            "items": {}
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "uptime_s",
+          "auth_required",
+          "mode",
+          "async_transport",
+          "features"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          },
+          "version": {
+            "type": "string"
+          },
+          "uptime_s": {
+            "type": "number"
+          },
+          "active_campaigns": {
+            "type": "integer"
+          },
+          "auth_required": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string",
+            "description": "`all` (one process) or `sync` (split AWS gateway)."
+          },
+          "async_transport": {
+            "type": "string",
+            "enum": [
+              "local-worker",
+              "sqs"
+            ]
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Features": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "modules",
+          "presets",
+          "build",
+          "env"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Module"
+            }
+          },
+          "presets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "build": {
+            "type": "object",
+            "properties": {
+              "otel": {
+                "type": "boolean"
+              },
+              "sqs": {
+                "type": "boolean"
+              },
+              "ui": {
+                "type": "boolean"
+              },
+              "grpc": {
+                "type": "boolean"
+              }
+            }
+          },
+          "env": {
+            "type": "string"
+          }
+        }
+      },
+      "Module": {
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "requires",
+          "compiled",
+          "enabled"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "compiled": {
+            "type": "boolean"
+          },
+          "build_tag": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AuthStatus": {
+        "type": "object",
+        "required": [
+          "auth_required",
+          "authenticated"
+        ],
+        "properties": {
+          "auth_required": {
+            "type": "boolean"
+          },
+          "authenticated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          }
+        }
+      },
+      "ProjectCreate": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "attempts",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UnixTime": {
+        "type": "number",
+        "description": "Unix time in seconds, with fractions."
+      },
+      "ListenerStatus": {
+        "type": "object",
+        "required": [
+          "listening",
+          "always_on",
+          "active_connections",
+          "peers",
+          "protocol",
+          "ws_path"
+        ],
+        "properties": {
+          "listening": {
+            "type": "boolean"
+          },
+          "always_on": {
+            "type": "boolean"
+          },
+          "active_connections": {
+            "type": "integer"
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "session_id": {
+                  "type": "string"
+                },
+                "service": {
+                  "type": "string"
+                },
+                "capabilities": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "replay": {
+                  "type": "boolean"
+                },
+                "connected_at": {
+                  "$ref": "#/components/schemas/UnixTime"
+                }
+              }
+            }
+          },
+          "protocol": {
+            "type": "string",
+            "const": "arl/1"
+          },
+          "ws_path": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object"
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": [
+          "id",
+          "service",
+          "config",
+          "created_at",
+          "last_seen",
+          "connected"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object",
+            "description": "Handshake profile: lab, phases, capabilities, metadata."
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "last_seen": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "connected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "external_id",
+          "name",
+          "status",
+          "started_at",
+          "event_count",
+          "service",
+          "cost_usd",
+          "tokens_in",
+          "tokens_out",
+          "model_calls",
+          "tool_calls",
+          "errors",
+          "models",
+          "tags",
+          "source",
+          "feedback_count"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Lab-assigned trace ID."
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string",
+            "description": "The run_id the agent sent."
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "running, completed, failed or cancelled."
+          },
+          "started_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "finished_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "event_count": {
+            "type": "integer"
+          },
+          "service": {
+            "type": "string"
+          },
+          "lab": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "cost_usd": {
+            "type": "number"
+          },
+          "tokens_in": {
+            "type": "integer"
+          },
+          "tokens_out": {
+            "type": "integer"
+          },
+          "model_calls": {
+            "type": "integer"
+          },
+          "tool_calls": {
+            "type": "integer"
+          },
+          "errors": {
+            "type": "integer"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedback_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "Run": {
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "external_id",
+          "name",
+          "status",
+          "started_at",
+          "event_count",
+          "service",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "check_config": {
+            "type": "object"
+          },
+          "started_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "finished_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "event_count": {
+            "type": "integer"
+          },
+          "service": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object"
+          },
+          "lab": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Derived analysis: phases, graph, costs, check verdicts."
+          }
+        }
+      },
+      "RunEvent": {
+        "type": "object",
+        "description": "A stored arl/1 event envelope (see AgentEvent) plus its ingest position.",
+        "required": [
+          "ordinal",
+          "received_at",
+          "event_id",
+          "run_id",
+          "event",
+          "phase"
+        ],
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "received_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "type": {
+            "type": "string",
+            "const": "event"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "span_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_span_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "RunEventPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "has_more"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunEvent"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OtlpInfo": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "encodings",
+          "listening"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "encodings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "compression": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conventions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "example_env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "listening": {
+            "type": "boolean"
+          },
+          "generated_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          }
+        }
+      },
+      "FeedbackCreate": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "description": "At least one of value, label or comment is required.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "value": {
+            "type": [
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Booleans are stored as 1 or 0."
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 5000
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "user",
+              "human",
+              "sdk"
+            ],
+            "default": "user"
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "metadata": {
+            "type": "object",
+            "description": "At most 16 KiB."
+          }
+        }
+      },
+      "FeedbackStored": {
+        "type": "object",
+        "required": [
+          "id",
+          "trace_id",
+          "name",
+          "source",
+          "author"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "user",
+              "human",
+              "sdk",
+              "auto"
+            ]
+          },
+          "author": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "Feedback": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FeedbackStored"
+          },
+          {
+            "type": "object",
+            "required": [
+              "created_at"
+            ],
+            "properties": {
+              "queue_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "evaluator_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "$ref": "#/components/schemas/UnixTime"
+              }
+            }
+          }
+        ]
+      },
+      "PromptMessage": {
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "PromptTemplate": {
+        "type": "object",
+        "properties": {
+          "system": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptMessage"
+            }
+          }
+        }
+      },
+      "Prompt": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "latest",
+          "labels"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "latest": {
+            "type": "integer",
+            "description": "Newest version number."
+          },
+          "labels": {
+            "type": "object",
+            "description": "Label to version number.",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          }
+        }
+      },
+      "PromptCommit": {
+        "type": "object",
+        "required": [
+          "template"
+        ],
+        "properties": {
+          "template": {
+            "$ref": "#/components/schemas/PromptTemplate"
+          },
+          "config": {
+            "type": "object",
+            "description": "Model parameters (model",
+            "temperature": null,
+            "...).": null
+          },
+          "message": {
+            "type": "string",
+            "description": "Commit message."
+          },
+          "author": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "description": "Labels to move to the new version.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PromptVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "prompt",
+          "version",
+          "template",
+          "variables",
+          "digest",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "`\u003cname\u003e@\u003cversion\u003e`."
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "template": {
+            "$ref": "#/components/schemas/PromptTemplate"
+          },
+          "config": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/UnixTime"
+          }
+        }
+      },
+      "PromptCommitted": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PromptVersion"
+          },
+          {
+            "type": "object",
+            "required": [
+              "created"
+            ],
+            "properties": {
+              "created": {
+                "type": "boolean",
+                "description": "False when identical to the latest version."
+              }
+            }
+          }
+        ]
+      },
+      "PromptResolved": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PromptVersion"
+          },
+          {
+            "type": "object",
+            "required": [
+              "labels",
+              "latest"
+            ],
+            "properties": {
+              "labels": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "description": {
+                "type": "string"
+              },
+              "latest": {
+                "type": "integer"
+              }
+            }
+          }
+        ]
+      },
+      "PromptRendered": {
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "messages",
+          "missing"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "system": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptMessage"
+            }
+          },
+          "config": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "missing": {
+            "type": "array",
+            "description": "Variables the template uses but the request did not supply.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AgentHello": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "protocol",
+          "service",
+          "stage"
+        ],
+        "properties": {
+          "type": {
+            "const": "hello"
+          },
+          "protocol": {
+            "const": "arl/1"
+          },
+          "service": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "stage": {
+            "const": "dev"
+          },
+          "lab": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "router",
+              "generic"
+            ],
+            "default": "agent"
+          },
+          "phases": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "Resume this session; requires resume_token."
+          },
+          "resume_token": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "event_id",
+          "run_id",
+          "event"
+        ],
+        "properties": {
+          "type": {
+            "const": "event"
+          },
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Unique per session; resending the same payload is deduplicated."
+          },
+          "run_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "event": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "e.g. run.start, model.request, tool.call, cost.record, run.end."
+          },
+          "phase": {
+            "type": "string",
+            "maxLength": 80,
+            "default": "agent"
+          },
+          "span_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "parent_span_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "timestamp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Client Unix time in seconds."
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "AgentPing": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "const": "ping"
+          }
+        }
+      },
+      "AgentReplayStatus": {
+        "type": "object",
+        "required": [
+          "type",
+          "replay_id",
+          "status"
+        ],
+        "properties": {
+          "type": {
+            "const": "replay.status"
+          },
+          "replay_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "started",
+              "completed",
+              "failed",
+              "rejected"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "LabHelloAck": {
+        "type": "object",
+        "required": [
+          "type",
+          "protocol",
+          "session_id",
+          "lab",
+          "phases",
+          "max_message_bytes",
+          "max_events_per_run",
+          "max_trace_bytes",
+          "heartbeat_seconds",
+          "features"
+        ],
+        "properties": {
+          "type": {
+            "const": "hello_ack"
+          },
+          "protocol": {
+            "const": "arl/1"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "resume_token": {
+            "type": "string",
+            "description": "Returned once when the session is created. Keep it private."
+          },
+          "lab": {
+            "type": "string"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_message_bytes": {
+            "type": "integer"
+          },
+          "max_events_per_run": {
+            "type": "integer"
+          },
+          "max_trace_bytes": {
+            "type": "integer"
+          },
+          "heartbeat_seconds": {
+            "type": "integer"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LabAck": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "const": "ack"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "replay_id": {
+            "type": "string",
+            "description": "Set when acknowledging replay.status."
+          }
+        }
+      },
+      "LabPong": {
+        "type": "object",
+        "required": [
+          "type",
+          "timestamp",
+          "listening"
+        ],
+        "properties": {
+          "type": {
+            "const": "pong"
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/UnixTime"
+          },
+          "listening": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LabError": {
+        "type": "object",
+        "required": [
+          "type",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "type": {
+            "const": "error"
+          },
+          "code": {
+            "type": "string",
+            "description": "e.g. validation_error, not_listening, event_conflict, message_too_large, invalid_resume."
+          },
+          "message": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LabReplay": {
+        "type": "object",
+        "required": [
+          "type",
+          "replay_id",
+          "scenario_id"
+        ],
+        "properties": {
+          "type": {
+            "const": "replay"
+          },
+          "replay_id": {
+            "type": "string"
+          },
+          "scenario_id": {
+            "type": "string"
+          },
+          "source_trace_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "input": {
+            "description": "The input to run the agent with."
+          },
+          "state": {
+            "type": "object",
+            "description": "Saved functional state to restore before running."
+          },
+          "config": {
+            "type": "object",
+            "description": "Overrides such as model or prompt."
+          },
+          "checks": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

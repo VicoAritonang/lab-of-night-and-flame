@@ -1,0 +1,693 @@
+{
+  "DELETE /feedback/{id}": {
+    "operation_id": "deleteFeedback",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:id string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.deleted string required"
+    ]
+  },
+  "DELETE /prompts/{name}": {
+    "operation_id": "deletePrompt",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:name string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.deleted string required"
+    ]
+  },
+  "GET /agent-lab/connection.md": {
+    "operation_id": "getConnectionGuide",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:text/plain:$ string required"
+    ]
+  },
+  "GET /agent-lab/runs": {
+    "operation_id": "listRuns",
+    "request": [
+      "header:X-Lab-Project string",
+      "query:before number",
+      "query:errors boolean",
+      "query:hours number",
+      "query:limit integer",
+      "query:min_ms number",
+      "query:model string",
+      "query:q string",
+      "query:service_name string",
+      "query:source string",
+      "query:status string",
+      "query:tag string",
+      "query:thread_id string",
+      "query:user_id string",
+      "query:verdict string"
+    ],
+    "response": [
+      "200:application/json:$ array required",
+      "200:application/json:$[] object required",
+      "200:application/json:$[].cost_usd number required",
+      "200:application/json:$[].duration_ms null|number",
+      "200:application/json:$[].errors integer required",
+      "200:application/json:$[].event_count integer required",
+      "200:application/json:$[].external_id string required",
+      "200:application/json:$[].feedback_count integer required",
+      "200:application/json:$[].finished_at null|number",
+      "200:application/json:$[].id string required",
+      "200:application/json:$[].lab null|string",
+      "200:application/json:$[].model_calls integer required",
+      "200:application/json:$[].models array required",
+      "200:application/json:$[].models[] string required",
+      "200:application/json:$[].name string required",
+      "200:application/json:$[].service string required",
+      "200:application/json:$[].session_id string required",
+      "200:application/json:$[].source string required",
+      "200:application/json:$[].started_at number required",
+      "200:application/json:$[].status string required",
+      "200:application/json:$[].tags array required",
+      "200:application/json:$[].tags[] string required",
+      "200:application/json:$[].thread_id null|string",
+      "200:application/json:$[].tokens_in integer required",
+      "200:application/json:$[].tokens_out integer required",
+      "200:application/json:$[].tool_calls integer required",
+      "200:application/json:$[].user_id null|string",
+      "200:application/json:$[].verdict null|string"
+    ]
+  },
+  "GET /agent-lab/runs/{id}": {
+    "operation_id": "getRun",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:id string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.check_config object",
+      "200:application/json:$.config object",
+      "200:application/json:$.event_count integer required",
+      "200:application/json:$.external_id string required",
+      "200:application/json:$.finished_at null|number",
+      "200:application/json:$.id string required",
+      "200:application/json:$.lab null|string",
+      "200:application/json:$.name string required",
+      "200:application/json:$.service string required",
+      "200:application/json:$.session_id string required",
+      "200:application/json:$.source string required",
+      "200:application/json:$.started_at number required",
+      "200:application/json:$.status string required",
+      "200:application/json:$.summary null|object",
+      "200:application/json:$.tags array|null",
+      "200:application/json:$.tags[] string required",
+      "200:application/json:$.thread_id null|string",
+      "200:application/json:$.user_id null|string"
+    ]
+  },
+  "GET /agent-lab/runs/{id}/events": {
+    "operation_id": "listRunEvents",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:id string required",
+      "query:after integer",
+      "query:limit integer"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.has_more boolean required",
+      "200:application/json:$.items array required",
+      "200:application/json:$.items[] object required",
+      "200:application/json:$.items[].data object",
+      "200:application/json:$.items[].event string required",
+      "200:application/json:$.items[].event_id string required",
+      "200:application/json:$.items[].ordinal integer required",
+      "200:application/json:$.items[].parent_span_id null|string",
+      "200:application/json:$.items[].phase string required",
+      "200:application/json:$.items[].received_at number required",
+      "200:application/json:$.items[].run_id string required",
+      "200:application/json:$.items[].span_id null|string",
+      "200:application/json:$.items[].timestamp null|number",
+      "200:application/json:$.items[].type const:event"
+    ]
+  },
+  "GET /agent-lab/runs/{id}/export": {
+    "operation_id": "exportRun",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:id string required"
+    ],
+    "response": [
+      "200:application/json:$ object required"
+    ]
+  },
+  "GET /agent-lab/runs/{id}/feedback": {
+    "operation_id": "listRunFeedback",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:id string required"
+    ],
+    "response": [
+      "200:application/json:$ array required",
+      "200:application/json:$[] object required",
+      "200:application/json:$[].author string required",
+      "200:application/json:$[].comment null|string",
+      "200:application/json:$[].created_at number required",
+      "200:application/json:$[].evaluator_id null|string",
+      "200:application/json:$[].id string required",
+      "200:application/json:$[].label null|string",
+      "200:application/json:$[].metadata object",
+      "200:application/json:$[].name string required",
+      "200:application/json:$[].queue_id null|string",
+      "200:application/json:$[].source enum:[user human sdk auto] required",
+      "200:application/json:$[].trace_id string required",
+      "200:application/json:$[].value null|number"
+    ]
+  },
+  "GET /agent-lab/sessions": {
+    "operation_id": "listSessions",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ array required",
+      "200:application/json:$[] object required",
+      "200:application/json:$[].config object required",
+      "200:application/json:$[].connected boolean required",
+      "200:application/json:$[].created_at number required",
+      "200:application/json:$[].id string required",
+      "200:application/json:$[].last_seen number required",
+      "200:application/json:$[].service string required"
+    ]
+  },
+  "GET /agent-lab/status": {
+    "operation_id": "getListenerStatus",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.active_connections integer required",
+      "200:application/json:$.always_on boolean required",
+      "200:application/json:$.config object",
+      "200:application/json:$.listening boolean required",
+      "200:application/json:$.peers array required",
+      "200:application/json:$.peers[] object required",
+      "200:application/json:$.peers[].capabilities array|null",
+      "200:application/json:$.peers[].capabilities[] string required",
+      "200:application/json:$.peers[].connected_at number",
+      "200:application/json:$.peers[].replay boolean",
+      "200:application/json:$.peers[].service string",
+      "200:application/json:$.peers[].session_id string",
+      "200:application/json:$.protocol const:arl/1 required",
+      "200:application/json:$.ws_path string required"
+    ]
+  },
+  "GET /auth/status": {
+    "operation_id": "getAuthStatus",
+    "request": [],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.auth_required boolean required",
+      "200:application/json:$.authenticated boolean required"
+    ]
+  },
+  "GET /docs": {
+    "operation_id": "getDocs",
+    "request": [],
+    "response": [
+      "200:text/html:$ string required"
+    ]
+  },
+  "GET /features": {
+    "operation_id": "getFeatures",
+    "request": [],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.build object required",
+      "200:application/json:$.build.grpc boolean",
+      "200:application/json:$.build.otel boolean",
+      "200:application/json:$.build.sqs boolean",
+      "200:application/json:$.build.ui boolean",
+      "200:application/json:$.enabled array required",
+      "200:application/json:$.enabled[] string required",
+      "200:application/json:$.env string required",
+      "200:application/json:$.modules array required",
+      "200:application/json:$.modules[] object required",
+      "200:application/json:$.modules[].build_tag string",
+      "200:application/json:$.modules[].compiled boolean required",
+      "200:application/json:$.modules[].enabled boolean required",
+      "200:application/json:$.modules[].name string required",
+      "200:application/json:$.modules[].requires array required",
+      "200:application/json:$.modules[].requires[] string required",
+      "200:application/json:$.modules[].title string required",
+      "200:application/json:$.presets object required",
+      "200:application/json:$.presets{} array required",
+      "200:application/json:$.presets{}[] string required"
+    ]
+  },
+  "GET /health": {
+    "operation_id": "getHealth",
+    "request": [],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.active_campaigns integer",
+      "200:application/json:$.async_transport enum:[local-worker sqs] required",
+      "200:application/json:$.auth_required boolean required",
+      "200:application/json:$.features array required",
+      "200:application/json:$.features[] string required",
+      "200:application/json:$.mode string required",
+      "200:application/json:$.status const:ok required",
+      "200:application/json:$.uptime_s number required",
+      "200:application/json:$.version string required"
+    ]
+  },
+  "GET /jobs/{id}": {
+    "operation_id": "getJob",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:id string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.attempts integer required",
+      "200:application/json:$.created_at string required",
+      "200:application/json:$.error null|string",
+      "200:application/json:$.id string required",
+      "200:application/json:$.kind string required",
+      "200:application/json:$.state enum:[queued running done failed] required",
+      "200:application/json:$.updated_at string required"
+    ]
+  },
+  "GET /openapi.json": {
+    "operation_id": "getOpenAPIJSON",
+    "request": [],
+    "response": [
+      "200:application/json:$ object required"
+    ]
+  },
+  "GET /openapi.yaml": {
+    "operation_id": "getOpenAPIYAML",
+    "request": [],
+    "response": [
+      "200:application/yaml:$ string required"
+    ]
+  },
+  "GET /otel/v1/traces": {
+    "operation_id": "getOtlpInfo",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.compression array",
+      "200:application/json:$.compression[] string required",
+      "200:application/json:$.conventions array",
+      "200:application/json:$.conventions[] string required",
+      "200:application/json:$.encodings array required",
+      "200:application/json:$.encodings[] string required",
+      "200:application/json:$.endpoint string required",
+      "200:application/json:$.example_env object",
+      "200:application/json:$.example_env{} string required",
+      "200:application/json:$.generated_at number",
+      "200:application/json:$.listening boolean required"
+    ]
+  },
+  "GET /projects": {
+    "operation_id": "listProjects",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ array required",
+      "200:application/json:$[] object required",
+      "200:application/json:$[].created_at number required",
+      "200:application/json:$[].id string required",
+      "200:application/json:$[].name string required"
+    ]
+  },
+  "GET /prompts": {
+    "operation_id": "listPrompts",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ array required",
+      "200:application/json:$[] object required",
+      "200:application/json:$[].created_at number",
+      "200:application/json:$[].description string",
+      "200:application/json:$[].id string required",
+      "200:application/json:$[].labels object required",
+      "200:application/json:$[].labels{} integer required",
+      "200:application/json:$[].latest integer required",
+      "200:application/json:$[].name string required",
+      "200:application/json:$[].updated_at number"
+    ]
+  },
+  "GET /prompts/{name}": {
+    "operation_id": "getPrompt",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:name string required",
+      "query:label string",
+      "query:version integer"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.author string",
+      "200:application/json:$.config null|object",
+      "200:application/json:$.created_at number required",
+      "200:application/json:$.description string",
+      "200:application/json:$.digest string required",
+      "200:application/json:$.id string required",
+      "200:application/json:$.labels object required",
+      "200:application/json:$.labels{} integer required",
+      "200:application/json:$.latest integer required",
+      "200:application/json:$.message string",
+      "200:application/json:$.prompt string required",
+      "200:application/json:$.template object required",
+      "200:application/json:$.template.messages array",
+      "200:application/json:$.template.messages[] object required",
+      "200:application/json:$.template.messages[].content string required",
+      "200:application/json:$.template.messages[].role enum:[system user assistant] required",
+      "200:application/json:$.template.system string",
+      "200:application/json:$.variables array required",
+      "200:application/json:$.variables[] string required",
+      "200:application/json:$.version integer required"
+    ]
+  },
+  "GET /prompts/{name}/versions": {
+    "operation_id": "listPromptVersions",
+    "request": [
+      "header:X-Lab-Project string",
+      "path:name string required"
+    ],
+    "response": [
+      "200:application/json:$ array required",
+      "200:application/json:$[] object required",
+      "200:application/json:$[].author string",
+      "200:application/json:$[].config null|object",
+      "200:application/json:$[].created_at number required",
+      "200:application/json:$[].digest string required",
+      "200:application/json:$[].id string required",
+      "200:application/json:$[].message string",
+      "200:application/json:$[].prompt string required",
+      "200:application/json:$[].template object required",
+      "200:application/json:$[].template.messages array",
+      "200:application/json:$[].template.messages[] object required",
+      "200:application/json:$[].template.messages[].content string required",
+      "200:application/json:$[].template.messages[].role enum:[system user assistant] required",
+      "200:application/json:$[].template.system string",
+      "200:application/json:$[].variables array required",
+      "200:application/json:$[].variables[] string required",
+      "200:application/json:$[].version integer required"
+    ]
+  },
+  "POST /agent-lab/listener/start": {
+    "operation_id": "startListener",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.active_connections integer required",
+      "200:application/json:$.always_on boolean required",
+      "200:application/json:$.config object",
+      "200:application/json:$.listening boolean required",
+      "200:application/json:$.peers array required",
+      "200:application/json:$.peers[] object required",
+      "200:application/json:$.peers[].capabilities array|null",
+      "200:application/json:$.peers[].capabilities[] string required",
+      "200:application/json:$.peers[].connected_at number",
+      "200:application/json:$.peers[].replay boolean",
+      "200:application/json:$.peers[].service string",
+      "200:application/json:$.peers[].session_id string",
+      "200:application/json:$.protocol const:arl/1 required",
+      "200:application/json:$.ws_path string required"
+    ]
+  },
+  "POST /agent-lab/listener/stop": {
+    "operation_id": "stopListener",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.active_connections integer required",
+      "200:application/json:$.always_on boolean required",
+      "200:application/json:$.config object",
+      "200:application/json:$.listening boolean required",
+      "200:application/json:$.peers array required",
+      "200:application/json:$.peers[] object required",
+      "200:application/json:$.peers[].capabilities array|null",
+      "200:application/json:$.peers[].capabilities[] string required",
+      "200:application/json:$.peers[].connected_at number",
+      "200:application/json:$.peers[].replay boolean",
+      "200:application/json:$.peers[].service string",
+      "200:application/json:$.peers[].session_id string",
+      "200:application/json:$.protocol const:arl/1 required",
+      "200:application/json:$.ws_path string required"
+    ]
+  },
+  "POST /agent-lab/runs/{id}/feedback": {
+    "operation_id": "createRunFeedback",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.author string",
+      "body:application/json:$.comment null|string",
+      "body:application/json:$.label null|string",
+      "body:application/json:$.metadata object",
+      "body:application/json:$.name string required",
+      "body:application/json:$.source enum:[user human sdk]",
+      "body:application/json:$.value boolean|null|number",
+      "header:Idempotency-Key string",
+      "header:X-Lab-Project string",
+      "path:id string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.author string required",
+      "200:application/json:$.comment null|string",
+      "200:application/json:$.id string required",
+      "200:application/json:$.label null|string",
+      "200:application/json:$.metadata object",
+      "200:application/json:$.name string required",
+      "200:application/json:$.source enum:[user human sdk auto] required",
+      "200:application/json:$.trace_id string required",
+      "200:application/json:$.value null|number"
+    ]
+  },
+  "POST /agent-lab/ticket": {
+    "operation_id": "createWebSocketTicket",
+    "request": [
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.expires_in integer required",
+      "200:application/json:$.ticket string required"
+    ]
+  },
+  "POST /auth/login": {
+    "operation_id": "login",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.token string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.authenticated const:true required"
+    ]
+  },
+  "POST /auth/logout": {
+    "operation_id": "logout",
+    "request": [],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.ok const:true"
+    ]
+  },
+  "POST /feedback": {
+    "operation_id": "createFeedback",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.author string",
+      "body:application/json:$.comment null|string",
+      "body:application/json:$.label null|string",
+      "body:application/json:$.metadata object",
+      "body:application/json:$.name string required",
+      "body:application/json:$.run_id string",
+      "body:application/json:$.service string",
+      "body:application/json:$.source enum:[user human sdk]",
+      "body:application/json:$.trace_id string",
+      "body:application/json:$.value boolean|null|number",
+      "header:Idempotency-Key string",
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.author string required",
+      "200:application/json:$.comment null|string",
+      "200:application/json:$.id string required",
+      "200:application/json:$.label null|string",
+      "200:application/json:$.metadata object",
+      "200:application/json:$.name string required",
+      "200:application/json:$.source enum:[user human sdk auto] required",
+      "200:application/json:$.trace_id string required",
+      "200:application/json:$.value null|number"
+    ]
+  },
+  "POST /otel/v1/traces": {
+    "operation_id": "exportOtlpTraces",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/x-protobuf:$ string required",
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/x-protobuf:$ string required"
+    ]
+  },
+  "POST /projects": {
+    "operation_id": "createProject",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.id string required",
+      "body:application/json:$.name string required",
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.id string required",
+      "200:application/json:$.name string required"
+    ]
+  },
+  "POST /prompts": {
+    "operation_id": "commitPrompt",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.author string",
+      "body:application/json:$.config object",
+      "body:application/json:$.description string",
+      "body:application/json:$.labels array",
+      "body:application/json:$.labels[] string required",
+      "body:application/json:$.message string",
+      "body:application/json:$.name string required",
+      "body:application/json:$.template object required",
+      "body:application/json:$.template.messages array",
+      "body:application/json:$.template.messages[] object required",
+      "body:application/json:$.template.messages[].content string required",
+      "body:application/json:$.template.messages[].role enum:[system user assistant] required",
+      "body:application/json:$.template.system string",
+      "header:X-Lab-Project string"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.author string",
+      "200:application/json:$.config null|object",
+      "200:application/json:$.created boolean required",
+      "200:application/json:$.created_at number required",
+      "200:application/json:$.digest string required",
+      "200:application/json:$.id string required",
+      "200:application/json:$.message string",
+      "200:application/json:$.prompt string required",
+      "200:application/json:$.template object required",
+      "200:application/json:$.template.messages array",
+      "200:application/json:$.template.messages[] object required",
+      "200:application/json:$.template.messages[].content string required",
+      "200:application/json:$.template.messages[].role enum:[system user assistant] required",
+      "200:application/json:$.template.system string",
+      "200:application/json:$.variables array required",
+      "200:application/json:$.variables[] string required",
+      "200:application/json:$.version integer required"
+    ]
+  },
+  "POST /prompts/{name}/labels": {
+    "operation_id": "setPromptLabel",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.label string required",
+      "body:application/json:$.version integer required",
+      "header:X-Lab-Project string",
+      "path:name string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.created_at number",
+      "200:application/json:$.description string",
+      "200:application/json:$.id string required",
+      "200:application/json:$.labels object required",
+      "200:application/json:$.labels{} integer required",
+      "200:application/json:$.latest integer required",
+      "200:application/json:$.name string required",
+      "200:application/json:$.updated_at number"
+    ]
+  },
+  "POST /prompts/{name}/render": {
+    "operation_id": "renderPrompt",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.label string",
+      "body:application/json:$.variables object",
+      "body:application/json:$.version integer",
+      "header:X-Lab-Project string",
+      "path:name string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.config null|object",
+      "200:application/json:$.messages array required",
+      "200:application/json:$.messages[] object required",
+      "200:application/json:$.messages[].content string required",
+      "200:application/json:$.messages[].role enum:[system user assistant] required",
+      "200:application/json:$.missing array required",
+      "200:application/json:$.missing[] string required",
+      "200:application/json:$.name string required",
+      "200:application/json:$.system string",
+      "200:application/json:$.version integer required"
+    ]
+  },
+  "POST /prompts/{name}/versions": {
+    "operation_id": "commitPromptVersion",
+    "request": [
+      "body:application/json:$ object required",
+      "body:application/json:$.author string",
+      "body:application/json:$.config object",
+      "body:application/json:$.labels array",
+      "body:application/json:$.labels[] string required",
+      "body:application/json:$.message string",
+      "body:application/json:$.template object required",
+      "body:application/json:$.template.messages array",
+      "body:application/json:$.template.messages[] object required",
+      "body:application/json:$.template.messages[].content string required",
+      "body:application/json:$.template.messages[].role enum:[system user assistant] required",
+      "body:application/json:$.template.system string",
+      "header:X-Lab-Project string",
+      "path:name string required"
+    ],
+    "response": [
+      "200:application/json:$ object required",
+      "200:application/json:$.author string",
+      "200:application/json:$.config null|object",
+      "200:application/json:$.created boolean required",
+      "200:application/json:$.created_at number required",
+      "200:application/json:$.digest string required",
+      "200:application/json:$.id string required",
+      "200:application/json:$.message string",
+      "200:application/json:$.prompt string required",
+      "200:application/json:$.template object required",
+      "200:application/json:$.template.messages array",
+      "200:application/json:$.template.messages[] object required",
+      "200:application/json:$.template.messages[].content string required",
+      "200:application/json:$.template.messages[].role enum:[system user assistant] required",
+      "200:application/json:$.template.system string",
+      "200:application/json:$.variables array required",
+      "200:application/json:$.variables[] string required",
+      "200:application/json:$.version integer required"
+    ]
+  }
+}

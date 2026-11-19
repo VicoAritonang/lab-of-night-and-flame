@@ -37,8 +37,10 @@ func TestParse(t *testing.T) {
 		if err != nil {
 			t.Fatal(c.spec, err)
 		}
-		if got := s.Enabled(); !slices.Equal(got, c.want) {
-			t.Errorf("%q: got %v want %v", c.spec, got, c.want)
+		// Presets skip modules left out by build tags (arl_nootel drops otel).
+		want := slices.DeleteFunc(slices.Clone(c.want), func(f Feature) bool { return !Compiled(f) })
+		if got := s.Enabled(); !slices.Equal(got, want) {
+			t.Errorf("%q: got %v want %v", c.spec, got, want)
 		}
 	}
 }

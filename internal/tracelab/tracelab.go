@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/coder/websocket"
 	"github.com/jackc/pgx/v5"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"go.vicoworks.com/agent-reliability-lab/internal/scoring"
@@ -244,10 +243,13 @@ type Hub struct {
 	alwaysOn bool
 }
 
-// Peer is one connected backend session. Writes are serialized so the Lab can
-// push replay commands while the socket loop replies to events.
+// Peer is one connected backend session, over WebSocket or a gRPC stream.
+// Writes are serialized so the Lab can push replay commands while the
+// connection loop replies to events.
 type Peer struct {
-	Conn         *websocket.Conn
+	// Send writes one frame; Close ends the connection (listener stopped).
+	Send         func(context.Context, M) error
+	Close        func(reason string)
 	Session      string
 	Project      string
 	Service      string
@@ -259,7 +261,7 @@ type Peer struct {
 func (p *Peer) Write(ctx context.Context, msg M) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.Conn.Write(ctx, websocket.MessageText, domain.JSON(msg))
+	return p.Send(ctx, msg)
 }
 func (p *Peer) Info() M {
 	return M{"session_id": p.Session, "service": p.Service, "capabilities": p.Capabilities, "replay": domain.Has(p.Capabilities, "replay"), "connected_at": p.Connected}
@@ -316,16 +318,16 @@ func (h *Hub) Push(ctx context.Context, project, session, service string, msg M)
 func (h *Hub) Stop(project string) {
 	h.mu.Lock()
 	h.listening[project] = false
-	sockets := []*websocket.Conn{}
+	peers := []*Peer{}
 	for sid, p := range h.active {
 		if p.Project == project {
-			sockets = append(sockets, p.Conn)
+			peers = append(peers, p)
 			delete(h.active, sid)
 		}
 	}
 	h.mu.Unlock()
-	for _, c := range sockets {
-		_ = c.Close(websocket.StatusServiceRestart, "listener stopped")
+	for _, p := range peers {
+		p.Close("listener stopped")
 	}
 }
 func (h *Hub) Close() {

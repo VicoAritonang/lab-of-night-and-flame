@@ -8,8 +8,9 @@ RUN npm run build
 
 FROM golang:1.26 AS build
 ARG VERSION=0.3.0
-# Leave heavy parts out of the binary, e.g. --build-arg ARL_BUILD_TAGS=arl_nosqs,arl_nootel
-# (arl_nosqs: AWS SDK / split deployment, arl_nootel: OTLP ingest, arl_noui: web UI).
+# Leave heavy parts out of the binary, e.g. --build-arg ARL_BUILD_TAGS=arl_nosqs,arl_nootel,arl_nogrpc
+# (arl_nosqs: AWS SDK / split deployment, arl_nootel: OTLP ingest, arl_noui: web UI,
+# arl_nogrpc: gRPC/Connect API).
 ARG ARL_BUILD_TAGS=""
 WORKDIR /src
 COPY go.mod go.sum ./
