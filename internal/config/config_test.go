@@ -38,3 +38,15 @@ func TestPoolsAndConcurrencyAreBounded(t *testing.T) {
 		t.Fatal(c, err)
 	}
 }
+func TestFeaturesFromEnvironment(t *testing.T) {
+	t.Setenv("NEON_DB_URL", "postgres://user:password@localhost/test?sslmode=disable")
+	t.Setenv("ARL_FEATURES", "tracing,-otel")
+	c, err := Load("sync")
+	if err != nil || !c.Features.On("traces") || c.Features.On("otel") || c.Features.On("experiments") {
+		t.Fatal(c.Features.Enabled(), err)
+	}
+	t.Setenv("ARL_FEATURES", "traces,bogus")
+	if _, err = Load("sync"); err == nil {
+		t.Fatal("unknown feature accepted")
+	}
+}

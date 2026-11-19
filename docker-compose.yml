@@ -17,6 +17,9 @@ services:
       ARL_DATABASE_URL: postgres://arl:arl@arl-db:5432/arl?sslmode=disable
       ARL_AUTH_TOKEN: ${ARL_AUTH_TOKEN:-}
       ARL_ALLOWED_ORIGINS: ${ARL_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # Modules to run: all (default), a preset (tracing, agent, eval), names, or
+      # removals such as "all,-perf,-experiments". See README, "Choosing modules".
+      ARL_FEATURES: ${ARL_FEATURES:-all}
       # Optional: let the Workbench call models directly (LLM step mode, Playground, experiments).
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

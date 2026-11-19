@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/features"
 	"go.vicoworks.com/agent-reliability-lab/internal/scoring"
 	"net/url"
 	"regexp"
@@ -219,7 +220,9 @@ func createProject(r *Request) (any, error) {
 	if tag.RowsAffected() == 0 {
 		return nil, conflict("project ID already exists")
 	}
-	_, err = r.Q.Scope(id).Enqueue(r.R.Context(), "datasets.seed", M{}, "seed:v2")
+	if r.S.Config.Features.On(features.Datasets) {
+		_, err = r.Q.Scope(id).Enqueue(r.R.Context(), "datasets.seed", M{}, "seed:v2")
+	}
 	if err == nil {
 		_, err = r.Q.Scope(id).Enqueue(r.R.Context(), "catalog.refresh", M{}, "catalog:initial")
 	}

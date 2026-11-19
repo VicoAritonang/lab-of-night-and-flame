@@ -103,3 +103,10 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T) => void] {
   const set = useCallback((nv: T) => { setV(nv); try { localStorage.setItem(key, JSON.stringify(nv)); } catch { /* ignore */ } }, [key]);
   return [v, set];
 }
+
+/** Server modules enabled by ARL_FEATURES. Until /api/health answers (or on a lab older than
+ * ARL_FEATURES) every module counts as on. Shares the header's cached health request. */
+export function useFeatures(): (feature?: string) => boolean {
+  const { data } = useApi<{ features?: string[] }>("/api/health", { refreshMs: 5000, staleMs: 2000 });
+  return (feature) => !feature || !data?.features || data.features.includes(feature);
+}

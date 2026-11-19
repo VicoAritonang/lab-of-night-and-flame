@@ -16,6 +16,10 @@ func (s *Server) datasetRoutes() {
 	s.route("POST /api/datasets/import", importDataset)
 	s.route("POST /api/datasets/{id}/predictions", importPredictions)
 	s.route("DELETE /api/datasets/{id}", deleteDataset)
+}
+
+// artifactRoutes are core: images uploaded by the SDKs, the playground and datasets.
+func (s *Server) artifactRoutes() {
 	s.route("POST /api/artifacts", uploadArtifact)
 	s.route("GET /api/artifacts/{digest}", getArtifact)
 }

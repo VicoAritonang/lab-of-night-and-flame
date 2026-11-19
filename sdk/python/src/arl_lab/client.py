@@ -21,7 +21,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from websockets.sync.client import connect as ws_connect
 
 PROTOCOL = "arl/1"
 DEFAULT_PHASES = ["input", "retrieval", "agent", "output"]
@@ -209,6 +208,10 @@ class Lab:
     def _connect(self) -> None:
         self._drop()
         headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
+        # Imported on first connect: a disabled client (production, no LAB_WS_URL)
+        # never loads the WebSocket stack.
+        from websockets.sync.client import connect as ws_connect
+
         ws = ws_connect(self.url, additional_headers=headers, open_timeout=3, max_size=2 << 20)
         ws.__enter__()  # long-lived connection; closed explicitly in _drop()
         self._ws, self._replies = ws, queue.Queue()

@@ -24,6 +24,7 @@ import (
 	"go.vicoworks.com/agent-reliability-lab/internal/config"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"go.vicoworks.com/agent-reliability-lab/internal/engine"
+	"go.vicoworks.com/agent-reliability-lab/internal/features"
 	"go.vicoworks.com/agent-reliability-lab/internal/server"
 	"go.vicoworks.com/agent-reliability-lab/internal/store"
 	migrations "go.vicoworks.com/agent-reliability-lab/sql"
@@ -50,6 +51,9 @@ func main() {
 	if cfg.EmbeddedWorker {
 		// The in-process worker reports provider keys from this environment.
 		cfg.Mode = "all"
+	}
+	for _, note := range cfg.FeatureNotes {
+		slog.Info("ARL_FEATURES: " + note)
 	}
 	db, err := store.Open(ctx, cfg.DatabaseURL, cfg.DBMax)
 	for attempt := 1; err != nil && cfg.AutoMigrate && attempt <= 30; attempt++ {
@@ -96,15 +100,20 @@ func main() {
 			}
 		}()
 	}
-	go engine.Periodic(ctx, db, app.Q)
+	// Background work belongs to modules: none of it starts for a disabled one.
+	if cfg.Features.On(features.Quality) {
+		go engine.Periodic(ctx, db, app.Q)
+	}
 	if cfg.QueueURL != "" {
 		go app.Q.Dispatch(ctx)
 	}
-	_, _ = app.Q.Enqueue(ctx, "datasets.seed", domain.M{}, "seed:v2")
+	if cfg.Features.On(features.Datasets) {
+		_, _ = app.Q.Enqueue(ctx, "datasets.seed", domain.M{}, "seed:v2")
+	}
 	_, _ = app.Q.Enqueue(ctx, "catalog.refresh", domain.M{}, "catalog:startup:"+time.Now().UTC().Format("2006-01-02"))
 	srv := &http.Server{Addr: cfg.Address, Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	go func() {
-		slog.Info("Agent Reliability Lab ready", "address", cfg.Address, "embedded_worker", cfg.EmbeddedWorker, "always_listening", cfg.ListenOnStart, "ui", cfg.ServeUI, "sqs_configured", cfg.QueueURL != "")
+		slog.Info("Agent Reliability Lab ready", "address", cfg.Address, "embedded_worker", cfg.EmbeddedWorker, "always_listening", cfg.ListenOnStart, "ui", app.UI != nil, "sqs_configured", cfg.QueueURL != "", "features", cfg.Features.Enabled())
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("HTTP listener failed")
 			cancel()

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go.vicoworks.com/agent-reliability-lab/internal/dataset"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
+	"go.vicoworks.com/agent-reliability-lab/internal/features"
 	"go.vicoworks.com/agent-reliability-lab/internal/perf"
 	"go.vicoworks.com/agent-reliability-lab/internal/quality"
 	"go.vicoworks.com/agent-reliability-lab/internal/queue"
@@ -15,6 +16,10 @@ import (
 )
 
 func (e *Engine) Handle(ctx context.Context, job *queue.Job) (M, error) {
+	// A worker only runs the modules it was configured with (ARL_FEATURES).
+	if f := features.ForJob(job.Kind); f != "" && !e.Config.Features.On(f) {
+		return validation(errors.New(e.Config.Features.Reason(f))), nil
+	}
 	// Model calls remain parallel; serialize large JSON/image/statistics jobs per
 	// invocation so several report/import jobs cannot exhaust the Lambda heap.
 	if domain.Has([]string{"datasets.seed", "artifact.validate", "dataset.import", "predictions.import", "experiment.preflight", "experiment.create", "experiment.launch", "campaign.prepare", "campaign.rerun", "campaign.analyze", "campaign.report", "trace.summarize", "trace.export"}, job.Kind) {
@@ -180,8 +185,10 @@ func (e *Engine) Handle(ctx context.Context, job *queue.Job) (M, error) {
 			return nil, err
 		}
 		// Finished traces feed the online evaluators.
-		if _, err = quality.Dispatch(ctx, w.DB, w.Q, domain.Str(p["trace_id"])); err != nil {
-			return nil, err
+		if w.Config.Features.On(features.Quality) {
+			if _, err = quality.Dispatch(ctx, w.DB, w.Q, domain.Str(p["trace_id"])); err != nil {
+				return nil, err
+			}
 		}
 		return result, nil
 	case "trace.evaluate":

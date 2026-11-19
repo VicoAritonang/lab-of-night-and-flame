@@ -34,7 +34,6 @@ func (s *Server) campaignRoutes() {
 	s.route("GET /api/campaigns/{id}/report.html", report)
 	s.route("GET /api/campaigns/{id}/report.md", report)
 	s.route("GET /api/campaigns/{id}/report.json", report)
-	s.route("POST /api/playground", playground)
 }
 func preflight(r *Request) (any, error) {
 	body, err := r.Body(2 << 20)

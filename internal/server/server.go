@@ -9,6 +9,7 @@ import (
 	"go.vicoworks.com/agent-reliability-lab/internal/config"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"go.vicoworks.com/agent-reliability-lab/internal/engine"
+	"go.vicoworks.com/agent-reliability-lab/internal/features"
 	"go.vicoworks.com/agent-reliability-lab/internal/queue"
 	"go.vicoworks.com/agent-reliability-lab/internal/store"
 	"go.vicoworks.com/agent-reliability-lab/internal/tracelab"
@@ -42,6 +43,8 @@ type Server struct {
 	slots, wsSlots, uploadSlots chan struct{}
 	ticketMu                    sync.Mutex
 	tickets                     map[string]ticket
+	// feature owns the routes being registered (see module); "" is the core.
+	feature features.Feature
 }
 type ticket struct {
 	Project string
@@ -63,6 +66,9 @@ type HTTPError struct {
 func (e *HTTPError) Error() string  { return fmt.Sprint(e.Detail) }
 func invalid(message string) error  { return &HTTPError{422, message} }
 func conflict(message string) error { return &HTTPError{409, message} }
+func (s *Server) unavailable(f features.Feature) error {
+	return &HTTPError{404, M{"message": s.Config.Features.Reason(f), "feature": f}}
+}
 func New(ctx context.Context, c config.Config, db *store.Store, doc string) (*Server, error) {
 	q, err := queue.New(ctx, db, c.QueueURL, c.Region, c.Concurrency)
 	if err != nil {
@@ -135,6 +141,10 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		if r.URL.Path == "/api/agent-lab/ws" {
+			if !s.Config.Features.On(features.Traces) {
+				writeError(w, s.unavailable(features.Traces))
+				return
+			}
 			s.websocket(w, r)
 			return
 		}
@@ -159,8 +169,23 @@ func (s *Server) Handler() http.Handler {
 		s.Mux.ServeHTTP(w, r)
 	})
 }
+
+// module registers the routes of an optional feature. When it is disabled the
+// routes stay registered but answer 404 with the reason, so clients can tell
+// a switched-off module from a typo.
+func (s *Server) module(f features.Feature, register func()) {
+	s.feature = f
+	register()
+	s.feature = ""
+}
+func (s *Server) handle(pattern string, handler http.HandlerFunc) {
+	if f := s.feature; f != "" && !s.Config.Features.On(f) {
+		handler = func(w http.ResponseWriter, r *http.Request) { writeError(w, s.unavailable(f)) }
+	}
+	s.Mux.HandleFunc(pattern, handler)
+}
 func (s *Server) route(pattern string, handler func(*Request) (any, error)) {
-	s.Mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+	s.handle(pattern, func(w http.ResponseWriter, r *http.Request) {
 		project := r.Header.Get("X-Lab-Project")
 		db := s.DB.Scope(project)
 		req := &Request{w, r, db, s.Q.Scope(db.Project), s.Engine.Scope(db.Project), s}
@@ -260,7 +285,10 @@ func (s *Server) routes() {
 			return nil, err
 		}
 		n, _ := r.DB.Count(r.R.Context(), "campaigns", M{"status": "running"})
-		return M{"status": "ok", "version": Version, "uptime_s": time.Since(s.Started).Seconds(), "active_campaigns": n, "auth_required": s.Config.AuthToken != "", "mode": s.Config.Mode, "async_transport": map[bool]string{true: "sqs", false: "local-worker"}[s.Config.QueueURL != ""]}, nil
+		return M{"status": "ok", "version": Version, "uptime_s": time.Since(s.Started).Seconds(), "active_campaigns": n, "auth_required": s.Config.AuthToken != "", "mode": s.Config.Mode, "async_transport": map[bool]string{true: "sqs", false: "local-worker"}[s.Config.QueueURL != ""], "features": s.Config.Features.Enabled()}, nil
+	})
+	s.route("GET /api/features", func(r *Request) (any, error) {
+		return M{"enabled": s.Config.Features.Enabled(), "modules": s.Config.Features.Describe(), "presets": features.Presets, "build": M{"otel": features.Compiled(features.OTel), "sqs": queue.SQSCompiled, "ui": s.UI != nil}, "env": "ARL_FEATURES"}, nil
 	})
 	s.route("GET /api/auth/status", func(r *Request) (any, error) {
 		return M{"auth_required": s.Config.AuthToken != "", "authenticated": s.Authorized(r.R)}, nil
@@ -298,17 +326,21 @@ func (s *Server) routes() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, "<!doctype html><title>ARL Go API</title><h1>Agent Reliability Lab · Go API</h1><p><a href='/api/openapi.json'>OpenAPI document</a> · <a href='/api/agent-lab/connection.md'>WebSocket and backend integration</a></p><p>SYNC HTTP facade and persistent ASYNC jobs. X-Lab-Job-ID identifies durable jobs.</p>")
 	})
-	s.Mux.HandleFunc("POST /api/otel/v1/traces", s.otlpTraces)
-	s.route("GET /api/otel/v1/traces", otlpInfo)
-	s.datasetRoutes()
-	s.campaignRoutes()
-	s.traceRoutes()
-	s.workbenchRoutes()
-	s.monitorRoutes()
-	s.qualityRoutes()
-	s.promptRoutes()
-	s.suiteRoutes()
-	s.perfRoutes()
+	s.artifactRoutes()
+	s.module(features.Datasets, s.datasetRoutes)
+	s.module(features.Experiments, s.campaignRoutes)
+	s.module(features.Playground, func() { s.route("POST /api/playground", playground) })
+	s.module(features.Traces, s.traceRoutes)
+	s.module(features.OTel, func() {
+		s.handle("POST /api/otel/v1/traces", s.otlpTraces)
+		s.route("GET /api/otel/v1/traces", otlpInfo)
+	})
+	s.module(features.Workbench, s.workbenchRoutes)
+	s.module(features.Monitor, s.monitorRoutes)
+	s.module(features.Quality, s.qualityRoutes)
+	s.module(features.Prompts, s.promptRoutes)
+	s.module(features.Suites, s.suiteRoutes)
+	s.module(features.Perf, s.perfRoutes)
 }
 
 // static serves the embedded single-page UI; unknown paths fall back to index.html.

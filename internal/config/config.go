@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.vicoworks.com/agent-reliability-lab/internal/features"
 )
 
 type Config struct {
@@ -18,6 +20,11 @@ type Config struct {
 	// All-in-one development mode: apply the schema, run the job worker in
 	// process, accept agents without pressing "Start listening" and serve the UI.
 	AutoMigrate, EmbeddedWorker, ListenOnStart, ServeUI bool
+	// Features selects the optional modules (ARL_FEATURES, default all); the
+	// zero value enables every compiled module. FeatureNotes explains implicit
+	// changes made while resolving it.
+	Features     features.Set
+	FeatureNotes []string
 }
 
 func DotEnv(path string) error {
@@ -85,6 +92,11 @@ func Load(mode string) (Config, error) {
 	c.EmbeddedWorker = Flag("ARL_EMBEDDED_WORKER", c.QueueURL == "")
 	c.ListenOnStart = Flag("ARL_LISTEN_ON_START", false)
 	c.ServeUI = Flag("ARL_SERVE_UI", true)
+	set, notes, err := features.Parse(os.Getenv("ARL_FEATURES"))
+	if err != nil {
+		return c, err
+	}
+	c.Features, c.FeatureNotes = set, notes
 	if c.Concurrency > 32 {
 		c.Concurrency = 32
 	}

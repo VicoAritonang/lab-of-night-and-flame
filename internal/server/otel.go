@@ -1,3 +1,5 @@
+//go:build !arl_nootel
+
 package server
 
 import (

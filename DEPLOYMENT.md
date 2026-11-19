@@ -7,7 +7,7 @@ Ada dua cara menjalankan lab:
 | **All-in-one (default)** | Development lokal / tim, berdampingan dengan agent yang sedang dibangun | `docker compose up -d` — satu container (API + WebSocket + UI + worker) dan PostgreSQL. Lihat [README](README.md#quick-start) dan [examples/compose](examples/compose/docker-compose.yml). Schema diterapkan otomatis (`ARL_AUTO_MIGRATE=true` di image). |
 | **Split SYNC / ASYNC (AWS)** | Lab bersama yang di-host: EC2 + Lambda/SQS + Neon + Vercel | Dokumen di bawah. Aktif ketika `ARL_SQS_QUEUE_URL` diisi; worker in-process otomatis mati. |
 
-Variabel penting all-in-one: `ARL_DATABASE_URL` (alias `NEON_DB_URL`), `ARL_AUTO_MIGRATE`, `ARL_EMBEDDED_WORKER` (default `true` tanpa SQS), `ARL_LISTEN_ON_START`, `ARL_SERVE_UI` (default `true`), `ARL_AUTH_TOKEN`. Daftar lengkap ada di [.env.example](.env.example).
+Variabel penting all-in-one: `ARL_DATABASE_URL` (alias `NEON_DB_URL`), `ARL_AUTO_MIGRATE`, `ARL_EMBEDDED_WORKER` (default `true` tanpa SQS), `ARL_LISTEN_ON_START`, `ARL_SERVE_UI` (default `true`), `ARL_FEATURES` (default `all`; pilih modul, mis. `tracing`, `agent`, `all,-perf` — lihat README → Choosing modules; pada mode split berikan nilai yang sama ke gateway dan worker), `ARL_AUTH_TOKEN`. Daftar lengkap ada di [.env.example](.env.example).
 
 ---
 

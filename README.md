@@ -190,12 +190,69 @@ error. A complete GitHub Actions job is in
 | `ARL_LISTEN_ON_START` | `true` in image | Accept agents immediately |
 | `ARL_EMBEDDED_WORKER` | `true` without SQS | Run jobs in process |
 | `ARL_SERVE_UI` | `true` | Serve the web UI on `/` |
+| `ARL_FEATURES` | `all` | Modules to run, see [Choosing modules](#choosing-modules) |
 | `ARL_AUTH_TOKEN` | empty | Protect the UI/API/WebSocket; agents send `LAB_TOKEN` |
 | `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `ARL_LOCAL_BASE_URL` | empty | Providers for LLM steps, Playground and experiments (`fake` always works) |
 
 The lab binds to `127.0.0.1` in the provided compose files. Set `ARL_AUTH_TOKEN`
 before exposing it beyond your machine. Larger shared deployments (EC2 + Lambda/SQS +
 Neon + Vercel) are described in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Choosing modules
+
+You rarely need everything. The lab is a small core (health, auth, projects, jobs,
+provider catalog, artifacts, the UI shell) plus optional modules:
+
+| Module | What it adds | Needs |
+| --- | --- | --- |
+| `traces` | Agent lab: live `arl/1` traces over the WebSocket | — |
+| `otel` | OTLP/HTTP ingest (`/api/otel/v1/traces`) | traces |
+| `monitor` | Monitor dashboards | traces |
+| `quality` | Feedback, annotation queues, online evaluators, alerts (+ the per-minute alert scheduler) | traces |
+| `workbench` | Scenario replay and LLM steps | traces |
+| `suites` | Regression suites, `arl suite` in CI | workbench |
+| `prompts` | Prompt registry | — |
+| `playground` | Model playground | — |
+| `datasets` | Datasets and the built-in fixtures (seeded at startup) | — |
+| `experiments` | Experiments, campaigns, reports, Router lab | datasets |
+| `perf` | Load tests of model endpoints | — |
+
+`ARL_FEATURES` takes module names, presets and removals, applied left to right:
+
+```bash
+ARL_FEATURES=tracing          # traces, otel, monitor: an observability sidecar
+ARL_FEATURES=agent            # tracing + quality, workbench, suites, prompts, playground
+ARL_FEATURES=eval             # datasets, experiments, playground, perf
+ARL_FEATURES=traces,prompts   # exactly these (requirements are added for you)
+ARL_FEATURES=all,-perf        # everything except perf ("-perf" alone means the same)
+```
+
+Enabling a module also enables what it needs; removing one also removes what depends
+on it (both are logged at startup). A disabled module starts no background work,
+enqueues and runs no jobs, disappears from the UI, and its API answers `404` with the
+reason. `GET /api/features` (and Settings → Modules) shows the current selection. In
+the split AWS deployment give the worker the same `ARL_FEATURES` as the gateway.
+
+To also drop the *code* of a part you never use, build with Go tags (default
+binary ≈ 23 MB, `linux/amd64`, stripped):
+
+| Tag | Leaves out | Binary |
+| --- | --- | --- |
+| `arl_nosqs` | AWS SDK and the split SQS deployment | ≈ 19 MB |
+| `arl_nootel` | OTLP/protobuf decoder (`otel` module) | ≈ 18 MB |
+| `arl_nosqs,arl_nootel` | both | ≈ 15.6 MB |
+| `arl_nosqs,arl_nootel,arl_noui` | both + the embedded UI (API only) | ≈ 14 MB |
+
+```bash
+go build -tags arl_nosqs,arl_nootel -o arl .
+docker build --build-arg ARL_BUILD_TAGS=arl_nosqs,arl_nootel -t arl:slim .
+```
+
+The SDKs are separate from all of this: an agent imports only `sdk/go` (one
+dependency, `coder/websocket`), `arl-lab` for Python or `arl-lab` for TypeScript
+(no dependencies), never the server module. With telemetry disabled (production, or
+no `LAB_WS_URL`) they are no-ops, and the Python SDK does not even import its
+WebSocket library.
 
 ## Development
 

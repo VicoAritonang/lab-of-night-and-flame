@@ -4,11 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/jackc/pgx/v5"
 	"go.vicoworks.com/agent-reliability-lab/internal/domain"
 	"go.vicoworks.com/agent-reliability-lab/internal/store"
@@ -35,25 +30,38 @@ type Item struct {
 	Payload   M
 }
 type Queue struct {
-	DB          *store.Store
-	SQS         *sqs.Client
+	DB *store.Store
+	// Remote hands job references to the split deployment's workers (SQS);
+	// nil in the all-in-one mode, where RunLocal polls PostgreSQL instead.
+	Remote      Sender
 	URL         string
 	Concurrency int
 }
 
+// Sender delivers job-reference message bodies and returns the indexes that
+// were accepted. The SQS implementation is left out with -tags arl_nosqs.
+type Sender interface {
+	Send(ctx context.Context, bodies []string) ([]int, error)
+}
+
+// SendFunc adapts a function to Sender.
+type SendFunc func(ctx context.Context, bodies []string) ([]int, error)
+
+func (f SendFunc) Send(ctx context.Context, bodies []string) ([]int, error) { return f(ctx, bodies) }
+
 func New(ctx context.Context, db *store.Store, url, region string, n int) (*Queue, error) {
 	q := &Queue{DB: db, URL: url, Concurrency: n}
 	if url != "" {
-		cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
+		remote, err := newSQS(ctx, url, region)
 		if err != nil {
-			return nil, errors.New("AWS configuration unavailable")
+			return nil, err
 		}
-		q.SQS = sqs.NewFromConfig(cfg)
+		q.Remote = remote
 	}
 	return q, nil
 }
 func (q *Queue) Scope(project string) *Queue {
-	return &Queue{q.DB.Scope(project), q.SQS, q.URL, q.Concurrency}
+	return &Queue{q.DB.Scope(project), q.Remote, q.URL, q.Concurrency}
 }
 func (q *Queue) EnqueueBatch(ctx context.Context, items []Item) error {
 	for start := 0; start < len(items); start += 200 {
@@ -283,7 +291,7 @@ func (q *Queue) Pending(ctx context.Context, n int) ([]string, error) {
 	return ids, rows.Err()
 }
 func (q *Queue) DispatchOnce(ctx context.Context) error {
-	if q.SQS == nil {
+	if q.Remote == nil {
 		return nil
 	}
 	tx, err := q.DB.Pool.Begin(ctx)
@@ -315,17 +323,15 @@ func (q *Queue) DispatchOnce(ctx context.Context) error {
 	if err = tx.Commit(ctx); err != nil {
 		return err
 	}
-	entries := []sqstypes.SendMessageBatchRequestEntry{}
+	bodies := make([]string, len(ids))
 	for i, id := range ids {
-		entries = append(entries, sqstypes.SendMessageBatchRequestEntry{Id: aws.String(fmt.Sprint(i)), MessageBody: aws.String(string(domain.JSONB(M{"job_id": id})))})
+		bodies[i] = string(domain.JSONB(M{"job_id": id}))
 	}
-	out, err := q.SQS.SendMessageBatch(ctx, &sqs.SendMessageBatchInput{QueueUrl: aws.String(q.URL), Entries: entries})
+	sent, err := q.Remote.Send(ctx, bodies)
 	if err != nil {
 		return errors.New("SQS dispatch failed; outbox retained")
 	}
-	for _, ok := range out.Successful {
-		var i int
-		_, _ = fmt.Sscan(aws.ToString(ok.Id), &i)
+	for _, i := range sent {
 		if i >= 0 && i < len(ids) {
 			_, err = q.DB.Pool.Exec(ctx, "UPDATE arl.jobs SET sent_at=now(),next_send_at=now()+interval '10 minutes',state=CASE WHEN state='running' AND lease_until<now() THEN 'queued' ELSE state END WHERE id=$1", ids[i])
 			if err != nil {

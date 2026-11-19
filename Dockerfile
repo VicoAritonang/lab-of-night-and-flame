@@ -8,14 +8,17 @@ RUN npm run build
 
 FROM golang:1.26 AS build
 ARG VERSION=0.3.0
+# Leave heavy parts out of the binary, e.g. --build-arg ARL_BUILD_TAGS=arl_nosqs,arl_nootel
+# (arl_nosqs: AWS SDK / split deployment, arl_nootel: OTLP ingest, arl_noui: web UI).
+ARG ARL_BUILD_TAGS=""
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY sdk/go/go.mod sdk/go/go.sum ./sdk/go/
 RUN go mod download
 COPY . .
 COPY --from=ui /ui/dist ./web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X go.vicoworks.com/agent-reliability-lab/internal/server.Version=${VERSION}" -o /out/arl . \
- && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/arl-worker ./cmd/worker
+RUN CGO_ENABLED=0 go build -trimpath -tags "${ARL_BUILD_TAGS}" -ldflags="-s -w -X go.vicoworks.com/agent-reliability-lab/internal/server.Version=${VERSION}" -o /out/arl . \
+ && CGO_ENABLED=0 go build -trimpath -tags "${ARL_BUILD_TAGS}" -ldflags="-s -w" -o /out/arl-worker ./cmd/worker
 
 FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.title="Agent Reliability Lab" \

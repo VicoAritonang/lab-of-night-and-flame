@@ -9,6 +9,7 @@ export default function Settings() {
   const { data: providers, reload } = useApi<Provider[]>("/api/providers");
   const { data: audit } = useApi<{ id: number; ts: number; actor: string; action: string; resource: string; detail: any }[]>("/api/audit?limit=80", { refreshMs: 10000 });
   const { data: auth } = useApi<{ auth_required: boolean; authenticated: boolean }>("/api/auth/status");
+  const { data: modules } = useApi<{ modules: { name: string; title: string; requires: string[]; compiled: boolean; build_tag?: string; enabled: boolean }[] }>("/api/features");
   const [form, setForm] = useState({ name: "", label: "", base_url: "http://host.docker.internal:11434/v1", key_env: "", rpm: 60 });
   const [err, setErr] = useState<Error | null>(null);
   const toast = useToast();
@@ -24,7 +25,7 @@ export default function Settings() {
   return (
     <div className="page">
       <div className="page-head"><div className="grow"><h1 className="page-title">Settings</h1>
-        <div className="page-sub">Provider connections, authentication and the audit trail. Secrets are never stored in the database, manifests, exports or logs — only environment variable names.</div></div></div>
+        <div className="page-sub">Modules, provider connections, authentication and the audit trail. Secrets are never stored in the database, manifests, exports or logs — only environment variable names.</div></div></div>
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div className="col" style={{ gap: 14 }}>
           <Card title="Provider connections" flush>
@@ -51,6 +52,14 @@ export default function Settings() {
           </Card>
         </div>
         <div className="col" style={{ gap: 14 }}>
+          <Card title="Modules" sub={<>Chosen at startup with <span className="mono">ARL_FEATURES</span>, e.g. <span className="mono">tracing</span>, <span className="mono">agent</span> or <span className="mono">all,-perf</span></>} flush>
+            {!modules ? <Loading rows={4} /> : (
+              <table className="t"><tbody>{modules.modules.map((m) => (
+                <tr key={m.name}><td><span className="mono">{m.name}</span><div className="muted">{m.title}{m.requires.length > 0 && <> · needs {m.requires.join(", ")}</>}</div></td>
+                  <td className="r">{m.enabled ? <Badge tone="good" dot>on</Badge> : !m.compiled ? <Badge tone="warn" title={"built with -tags " + m.build_tag}>not compiled</Badge> : <Badge>off</Badge>}</td></tr>
+              ))}</tbody></table>
+            )}
+          </Card>
           <Card title="Authentication">
             {auth ? (auth.auth_required ? (
               <div className="col"><div><Badge tone="good">owner token required</Badge></div>
